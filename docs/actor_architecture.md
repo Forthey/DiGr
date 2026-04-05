@@ -116,7 +116,7 @@
 ```python
 from enum import Enum, auto
 
-from src.actor import Actor, ActorHandle, ManualActorDriver
+from actor import Actor, ActorHandle, ManualActorDriver
 
 
 class State(Enum):
@@ -405,3 +405,22 @@ end note
 - Драйверы зависят только от `Drivable`.
 - `ActorHandle` и `Output` убирают прямую связанность между акторами.
 - `BaseActorDriver` централизует очередь runnable-акторов и повторный запуск.
+
+## Пример прикладного использования
+
+Эта actor-архитектура уже используется в подсистеме AST-парсинга `src/document_ast`.
+
+Там actor-слой решает инфраструктурную задачу:
+
+- маршрутизацию сообщений между стадиями пайплайна
+- планирование обработки через driver
+- отделение прикладной логики разбора от механики исполнения
+
+Сами правила структуры документа при этом задаются не в акторах, а в YAML-конфигурации формата.
+
+Связанные материалы:
+
+- [Архитектура AST-парсера](./ast_parser_architecture.md)
+- [Конфигурация AST-парсера](./ast_parser_configuration.md)
+- [UML class diagram AST-парсера](./uml/ast_parser_architecture.puml)
+- [UML sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)

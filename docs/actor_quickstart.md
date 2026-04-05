@@ -5,7 +5,7 @@
 Обычно достаточно импортов:
 
 ```python
-from src.actor import (
+from actor import (
     Actor,
     ActorHandle,
     AsyncioActorDriver,
@@ -14,14 +14,14 @@ from src.actor import (
 )
 ```
 
-Если нужны низкоуровневые архитектурные контракты, их стоит импортировать из `src.actor.arch`.
+Если нужны низкоуровневые архитектурные контракты, их стоит импортировать из `actor.arch`.
 
 ## Минимальный актор
 
 ```python
 from enum import Enum, auto
 
-from src.actor import Actor
+from actor import Actor
 
 
 class State(Enum):
@@ -47,7 +47,7 @@ class DemoActor(Actor[State, object, object]):
 Используй `ManualActorDriver`, когда нужен явный контроль над исполнением.
 
 ```python
-from src.actor import ManualActorDriver
+from actor import ManualActorDriver
 
 driver = ManualActorDriver(step_limit=1)
 actor = DemoActor(driver=driver)
@@ -69,7 +69,7 @@ assert actor.state is State.DONE
 Используй `ThreadedActorDriver`, когда нужен фоновый worker-thread.
 
 ```python
-from src.actor import ThreadedActorDriver
+from actor import ThreadedActorDriver
 
 driver = ThreadedActorDriver(step_limit=1)
 actor = DemoActor(driver=driver)
@@ -88,7 +88,7 @@ driver.close()
 ```python
 import asyncio
 
-from src.actor import AsyncioActorDriver
+from actor import AsyncioActorDriver
 
 
 async def main() -> None:
@@ -118,7 +118,7 @@ asyncio.run(main())
 ```python
 from enum import Enum, auto
 
-from src.actor import Actor, ActorHandle, ManualActorDriver
+from actor import Actor, ActorHandle, ManualActorDriver
 
 
 class CollectorState(Enum):
@@ -184,3 +184,10 @@ assert collector.received == ["pong"]
 - Переходы между состояниями держи внутри actor/FSM handlers.
 - Передавай `ActorHandle` или `Output`, а не конкретные объекты акторов.
 - В тестах по умолчанию используй `ManualActorDriver`, если не нужно специально проверять thread/event-loop поведение.
+
+## Где посмотреть прикладной пример
+
+Практический пример более крупного actor-пайплайна находится в подсистеме AST-парсера:
+
+- [Архитектура AST-парсера](./ast_parser_architecture.md)
+- [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md)

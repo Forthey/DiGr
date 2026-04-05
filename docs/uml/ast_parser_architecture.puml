@@ -1,0 +1,243 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+package "actor.api" {
+  abstract class Actor
+  class ActorHandle
+  class ManualActorDriver
+}
+
+package "document_ast.api" {
+  class ActorAstParser {
+    -_config_dir: Path
+    -_loader: ConfigLoader
+    +from_config_dir(path)
+    +parse(path, format_name)
+  }
+}
+
+package "document_ast.config" {
+  class ConfigLoader {
+    +load(path, expected_format_name)
+  }
+
+  class ParserConfig {
+    +format_config: FormatConfig
+    +entities: dict
+    +format_name
+    +get_entity(entity_name)
+  }
+
+  class FormatConfig {
+    +name: str
+    +reader: dict
+    +root_entity: str
+  }
+
+  class EntityConfig {
+    +name: str
+    +contains: str
+    +segmenter: dict
+  }
+
+  ParserConfig *-- "1" FormatConfig
+  ParserConfig *-- "1..*" EntityConfig
+  ConfigLoader --> ParserConfig : создаёт
+}
+
+package "document_ast.source" {
+  abstract class SourceReader {
+    +read(path, format_name, reader_config)
+  }
+
+  class PlainTextReader {
+    +read(path, format_name, reader_config)
+  }
+
+  class SourceReaderRegistry {
+    -_readers: dict
+    +read(path, format_name, reader_config)
+  }
+
+  class SourceDocument {
+    +path: str
+    +format_name: str
+    +text: str
+  }
+
+  SourceReader <|-- PlainTextReader
+  SourceReaderRegistry o-- "1..*" SourceReader
+  SourceReader --> SourceDocument : создаёт
+}
+
+package "document_ast.segmentation" {
+  class TextSegmenter {
+    +segment(text, base_start, segmenter_config)
+  }
+
+  class TextSegment {
+    +text: str
+    +start: int
+    +end: int
+  }
+
+  TextSegmenter --> "0..*" TextSegment : создаёт
+}
+
+package "document_ast.model" {
+  class AstBuilder {
+    -_config: ParserConfig
+    -_segmenter: TextSegmenter
+    +build(document)
+  }
+
+  class AstDocument {
+    +source_path: str
+    +format_name: str
+    +root_entity: str
+    +root: AstNode
+    +to_dict()
+  }
+
+  class AstNode {
+    +entity: str
+    +text: str
+    +start: int
+    +end: int
+    +children: list
+    +metadata: dict
+    +to_dict()
+  }
+
+  AstBuilder --> ParserConfig
+  AstBuilder --> TextSegmenter
+  AstBuilder --> SourceDocument
+  AstBuilder --> AstDocument : создаёт
+  AstDocument *-- "1" AstNode : root
+  AstNode *-- "0..*" AstNode : children
+}
+
+package "document_ast.runtime" {
+  enum ParseState {
+    IDLE
+    WAITING_FOR_DOCUMENT
+    WAITING_FOR_AST
+    COMPLETED
+  }
+
+  class ParseDocumentRequest {
+    +path: str
+    +format_name: str
+  }
+
+  class ReadDocumentRequest {
+    +path: str
+    +format_name: str
+  }
+
+  class DocumentLoaded {
+    +document: SourceDocument
+  }
+
+  class BuildAstRequest {
+    +document: SourceDocument
+  }
+
+  class ParseCompleted {
+    +document: AstDocument
+  }
+
+  class ParserRuntime {
+    +driver: ManualActorDriver
+    +coordinator: ParserCoordinatorActor
+    +collector: ResultCollectorActor
+  }
+
+  class ParserRuntimeFactory {
+    +create(config)
+  }
+
+  class ParserCoordinatorActor {
+    -_reader: ActorHandle
+    -_builder: ActorHandle
+    -_collector: ActorHandle
+    +set_reader(reader)
+    +set_builder(builder)
+  }
+
+  class DocumentReaderActor {
+    -_config: ParserConfig
+    -_reply_to: ActorHandle
+    -_registry: SourceReaderRegistry
+  }
+
+  class AstBuilderActor {
+    -_builder: AstBuilder
+    -_reply_to: ActorHandle
+  }
+
+  class ResultCollectorActor {
+    +result: AstDocument
+  }
+
+  ParserRuntimeFactory --> ParserRuntime : создаёт
+  ParserRuntimeFactory --> ParserCoordinatorActor : создаёт
+  ParserRuntimeFactory --> DocumentReaderActor : создаёт
+  ParserRuntimeFactory --> AstBuilderActor : создаёт
+  ParserRuntimeFactory --> ResultCollectorActor : создаёт
+
+  ParserRuntime *-- "1" ManualActorDriver
+  ParserRuntime *-- "1" ParserCoordinatorActor
+  ParserRuntime *-- "1" ResultCollectorActor
+
+  ParserCoordinatorActor --> ActorHandle : использует
+  DocumentReaderActor --> ActorHandle : reply_to
+  AstBuilderActor --> ActorHandle : reply_to
+
+  ParserCoordinatorActor --> ReadDocumentRequest
+  ParserCoordinatorActor --> BuildAstRequest
+  ParserCoordinatorActor --> ParseCompleted
+  DocumentReaderActor --> DocumentLoaded
+  AstBuilderActor --> ParseCompleted
+
+  DocumentReaderActor --> ParserConfig
+  DocumentReaderActor --> SourceReaderRegistry
+  AstBuilderActor --> AstBuilder
+  ResultCollectorActor --> AstDocument
+
+  DocumentLoaded --> SourceDocument
+  BuildAstRequest --> SourceDocument
+  ParseCompleted --> AstDocument
+}
+
+Actor <|-- ParserCoordinatorActor
+Actor <|-- DocumentReaderActor
+Actor <|-- AstBuilderActor
+Actor <|-- ResultCollectorActor
+
+ActorAstParser --> ConfigLoader
+ActorAstParser --> ParserRuntimeFactory
+ActorAstParser --> AstDocument : возвращает
+
+note right of ActorAstParser
+  Формат определяется по расширению файла,
+  если format_name не передан явно.
+end note
+
+note bottom of ParserConfig
+  Иерархия entities должна быть ацикличной.
+  root_entity обязан ссылаться на существующую сущность.
+end note
+
+note bottom of ParserRuntime
+  Runtime хранит только driver, coordinator и collector.
+  Reader и builder создаются factory и связываются
+  с coordinator через ActorHandle.
+end note
+
+@enduml

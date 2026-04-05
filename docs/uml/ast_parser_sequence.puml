@@ -1,0 +1,97 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor Client
+participant ActorAstParser
+participant ConfigLoader
+participant ParserRuntimeFactory
+participant ManualActorDriver
+participant ParserCoordinatorActor
+participant DocumentReaderActor
+participant SourceReaderRegistry
+participant AstBuilderActor
+participant AstBuilder
+participant ResultCollectorActor
+
+Client -> ActorAstParser: parse(path, format_name?)
+activate ActorAstParser
+
+opt format_name is None
+  ActorAstParser -> ActorAstParser: _detect_format(path)
+end
+
+ActorAstParser -> ConfigLoader: load(config/formats/<format>.yaml,\nexpected_format_name)
+activate ConfigLoader
+ConfigLoader --> ActorAstParser: ParserConfig
+deactivate ConfigLoader
+
+ActorAstParser -> ParserRuntimeFactory: create(config)
+activate ParserRuntimeFactory
+ParserRuntimeFactory -> ManualActorDriver: create step_limit=1
+ParserRuntimeFactory -> ResultCollectorActor: bind(driver)
+ParserRuntimeFactory -> ParserCoordinatorActor: bind(driver)
+ParserRuntimeFactory -> DocumentReaderActor: bind(driver)
+ParserRuntimeFactory -> AstBuilderActor: bind(driver)
+ParserRuntimeFactory -> ParserCoordinatorActor: set_reader(reader.as_handle())
+ParserRuntimeFactory -> ParserCoordinatorActor: set_builder(builder.as_handle())
+ParserRuntimeFactory --> ActorAstParser: ParserRuntime
+deactivate ParserRuntimeFactory
+
+ActorAstParser -> ParserCoordinatorActor: put(ParseDocumentRequest)
+note right
+  put() кладёт сообщение в mailbox
+  и планирует актор в driver.
+end note
+
+ActorAstParser -> ManualActorDriver: drain()
+activate ManualActorDriver
+
+loop while runnable actors exist
+  ManualActorDriver -> ParserCoordinatorActor: step(1)
+  activate ParserCoordinatorActor
+  ParserCoordinatorActor -> DocumentReaderActor: tell(ReadDocumentRequest)
+  deactivate ParserCoordinatorActor
+
+  ManualActorDriver -> DocumentReaderActor: step(1)
+  activate DocumentReaderActor
+  DocumentReaderActor -> SourceReaderRegistry: read(path, format_name, reader_config)
+  activate SourceReaderRegistry
+  SourceReaderRegistry --> DocumentReaderActor: SourceDocument
+  deactivate SourceReaderRegistry
+  DocumentReaderActor -> ParserCoordinatorActor: tell(DocumentLoaded)
+  deactivate DocumentReaderActor
+
+  ManualActorDriver -> ParserCoordinatorActor: step(1)
+  activate ParserCoordinatorActor
+  ParserCoordinatorActor -> AstBuilderActor: tell(BuildAstRequest)
+  deactivate ParserCoordinatorActor
+
+  ManualActorDriver -> AstBuilderActor: step(1)
+  activate AstBuilderActor
+  AstBuilderActor -> AstBuilder: build(SourceDocument)
+  activate AstBuilder
+  AstBuilder --> AstBuilderActor: AstDocument
+  deactivate AstBuilder
+  AstBuilderActor -> ParserCoordinatorActor: tell(ParseCompleted)
+  deactivate AstBuilderActor
+
+  ManualActorDriver -> ParserCoordinatorActor: step(1)
+  activate ParserCoordinatorActor
+  ParserCoordinatorActor -> ResultCollectorActor: tell(ParseCompleted)
+  deactivate ParserCoordinatorActor
+
+  ManualActorDriver -> ResultCollectorActor: step(1)
+  activate ResultCollectorActor
+  ResultCollectorActor --> ManualActorDriver: result stored
+  deactivate ResultCollectorActor
+end
+
+deactivate ManualActorDriver
+
+ActorAstParser --> Client: AstDocument
+deactivate ActorAstParser
+
+@enduml
