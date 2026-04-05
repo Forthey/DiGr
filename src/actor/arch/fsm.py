@@ -5,7 +5,7 @@ from abc import ABC
 from enum import Enum
 from typing import Generic, TypeVar, cast
 
-from .mailbox import InboxLike
+from .inbox_like import InboxLike
 
 State = TypeVar("State", bound=Enum)
 QueueItem = TypeVar("QueueItem")
