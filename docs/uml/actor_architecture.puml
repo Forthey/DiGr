@@ -1,0 +1,209 @@
+@startuml
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
+
+package "actor.output" {
+  interface Output {
+    +put(message)
+  }
+}
+
+package "actor.handles" {
+  class ActorHandle {
+    -_output: Output
+    +output: Output
+    +put(message)
+    +tell(message)
+  }
+
+  ActorHandle ..|> Output
+  ActorHandle --> "1" Output : делегирует отправку
+}
+
+package "actor.arch" {
+  interface InboxLike {
+    +get_nowait()
+  }
+
+  interface MailboxLike {
+    +put(item)
+    +__len__()
+  }
+
+  class Mailbox {
+    -_items
+    -_lock
+    +put(item)
+    +extend(items)
+    +get_nowait()
+    +empty()
+    +__len__()
+  }
+
+  interface Drivable {
+    +step(limit)
+    +pending
+  }
+
+  abstract class ActorDriver {
+    +bind(actor)
+    +attach(actor)
+    +schedule(actor)
+    +is_idle()
+    +queue_size()
+    +close()
+  }
+
+  abstract class ProceedableActorDriver {
+    +proceed(step_limit)
+    +drain(step_limit)
+  }
+
+  abstract class BaseActorDriver {
+    -_ready_actors: ReadyActors
+    +attach(actor)
+    +schedule(actor)
+    +is_idle()
+    +queue_size()
+    #_pop_ready_actor()
+    #_complete_actor(actor)
+    #_schedule_actor(actor)
+  }
+
+  abstract class Fsm {
+    -_state_type
+    -_inbox: InboxLike
+    +state
+    +state_type
+    +states
+    +inbox
+    +step(limit)
+    +extract_message(item)
+    +handle(message)
+    +on_unhandled_message(message)
+    -_get_handler_name(state)
+    -_iter_handler_names(state, message)
+    -_validate_state(value)
+  }
+
+  abstract class Actor {
+    -_mailbox: MailboxLike
+    -_driver: ActorDriver
+    +mailbox
+    +driver
+    +bind(driver)
+    +put(item)
+    +send(item)
+    +extend(items)
+    +pending
+    +as_handle()
+  }
+
+  InboxLike <|-- MailboxLike
+  InboxLike <|.. Mailbox
+  MailboxLike <|.. Mailbox
+  Drivable <|.. Actor
+  Output <|.. Actor
+  Fsm <|-- Actor
+  ActorDriver <|-- ProceedableActorDriver
+  ActorDriver <|-- BaseActorDriver
+  Actor *-- "1" MailboxLike : владеет
+  Actor --> "0..1" ActorDriver : привязан к
+  Actor ..> ActorHandle : создаёт
+}
+
+package "actor.arch.internal" {
+  class ReadyActors {
+    -_scheduled
+    -_ready
+    -_inflight
+    +attach(actor)
+    +schedule(actor)
+    +pop()
+    +complete(actor)
+    +is_idle()
+    +queue_size()
+  }
+}
+
+package "actor.drivers" {
+  class ManualActorDriver {
+    -_step_limit
+    +proceed(step_limit)
+  }
+
+  class ThreadedActorDriver {
+    -_step_limit
+    -_closing
+    -_condition
+    -_thread
+    +schedule(actor)
+    +wait_until_idle(timeout)
+    +close()
+  }
+
+  class AsyncioActorDriver {
+    -_step_limit
+    -_loop
+    -_ready
+    -_scheduled
+    -_inflight
+    -_closing
+    -_worker_task
+    -_idle_event
+    +attach(actor)
+    +schedule(actor)
+    +is_idle()
+    +queue_size()
+    +join()
+    +aclose()
+    +close()
+  }
+
+  ProceedableActorDriver <|-- ManualActorDriver
+  BaseActorDriver <|-- ManualActorDriver
+  BaseActorDriver <|-- ThreadedActorDriver
+  ActorDriver <|-- AsyncioActorDriver
+}
+
+BaseActorDriver *-- "1" ReadyActors : владеет
+
+note right of ActorHandle
+  Параметр типа:
+  Message
+end note
+
+note right of Mailbox
+  Параметр типа:
+  QueueItem
+end note
+
+note right of Fsm
+  Параметры типа:
+  State
+  QueueItem
+  Message
+end note
+
+note right of Actor
+  Параметры типа:
+  State
+  QueueItem
+  Message
+
+  Порядок поиска обработчика:
+  1. on_<state>_<message>
+  2. on_<state>
+  3. on_<message>
+  4. on_any
+end note
+
+note bottom of BaseActorDriver
+  Общая ответственность:
+  - дедупликация runnable-акторов
+  - учёт inflight-исполнений
+  - перепланирование, если mailbox не пуст
+end note
+
+@enduml
