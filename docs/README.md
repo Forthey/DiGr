@@ -17,6 +17,9 @@
 - [Компактная UML-диаграмма actor-архитектуры](./uml/actor_architecture_min.puml)
 - [UML class diagram AST-парсера](./uml/ast_parser_architecture.puml)
 - [UML sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
+- [Компонентная диаграмма проекта](./uml/component_overview.puml)
+- [Диаграмма состояний координатора AST-парсера](./uml/coordinator_state_machine.puml)
+- [Fan-out / Fan-in sequence diagram AST-парсера](./uml/fanout_sequence.puml)
 
 ## Как читать документацию
 

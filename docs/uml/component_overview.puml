@@ -1,0 +1,55 @@
+@startuml
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+title DiGr - Компонентная диаграмма (текущее состояние + DSL roadmap)
+
+package "DSL Engine (будущее)" as dsl #DDDDDD {
+  [Query Parser] as qp
+  [Query Executor] as qe
+  [Result Aggregator] as ra
+}
+
+package "Document AST" as ast {
+  [ActorAstParser\n(публичный API)] as api
+  [ConfigLoader] as cl
+  [Actor Pipeline\n(Coordinator + Workers)] as pipeline
+  [AstBuilder] as builder
+  [TextSegmenter\n(Strategy Registry)] as seg
+  [SourceReaderRegistry] as srr
+}
+
+package "Actor Runtime" as actor {
+  [Actor / FSM] as core
+  [Drivers\n(Manual, Threaded, Asyncio)] as drivers
+  [Mailbox / ActorHandle] as mh
+}
+
+database "config/formats/*.yaml" as config
+
+api --> cl : загружает конфигурацию
+api --> pipeline : создаёт runtime
+cl --> config : читает YAML
+
+pipeline --> core : использует акторный рантайм
+pipeline --> builder : worker'ы строят поддеревья
+pipeline --> srr : reader читает файл
+builder --> seg : сегментирует текст
+
+core --> mh : сообщения через mailbox
+core --> drivers : scheduling
+
+qp ..> pipeline : переиспользует акторы
+qe ..> api : обходит AstDocument
+qe ..> core : matcher-акторы
+ra ..> qe : собирает результаты
+
+note bottom of dsl
+  Пунктиром показаны
+  будущие зависимости
+  DSL-слоя от текущей
+  инфраструктуры.
+end note
+
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+skinparam shadowing false
+skinparam stateFontSize 14
+skinparam arrowFontSize 12
+
+title Диаграмма состояний ParserCoordinatorActor
+
+[*] --> IDLE
+
+IDLE --> WAITING_FOR_DOCUMENT : ParseDocumentRequest\n/ tell(ReadDocumentRequest) → Reader
+
+WAITING_FOR_DOCUMENT --> BUILDING_SUBTREES : DocumentLoaded\n/ segment root entity\n/ tell(BuildSubtreeRequest) × N → Workers
+
+BUILDING_SUBTREES --> BUILDING_SUBTREES : SubtreeCompleted [pending > 0]\n/ store subtree result
+
+BUILDING_SUBTREES --> COMPLETED : SubtreeCompleted [all received]\n/ assemble AstDocument\n/ tell(ParseCompleted) → Collector
+
+COMPLETED --> [*]
+
+note right of BUILDING_SUBTREES
+  Fan-out: N сегментов отправлены
+  N worker-акторам. Координатор
+  ожидает N ответов SubtreeCompleted.
+
+  Сегменты распределяются round-robin:
+  worker_index = segment_index % worker_count
+end note
+
+@enduml

@@ -1,0 +1,109 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title Sequence: Fan-out / Fan-in параллельная сборка AST
+
+actor Client
+participant ActorAstParser
+participant ConfigLoader
+participant ParserRuntimeFactory
+participant Driver
+participant Coordinator as "Coordinator\n(ParserCoordinatorActor)"
+participant Reader as "Reader\n(DocumentReaderActor)"
+participant "Worker[0]" as W0
+participant "Worker[1]" as W1
+participant "Worker[2]" as W2
+participant Collector as "Collector\n(ResultCollectorActor)"
+
+Client -> ActorAstParser: parse(path, format_name?)
+
+opt format_name is None
+  ActorAstParser -> ActorAstParser: _detect_format(path)
+end
+
+ActorAstParser -> ConfigLoader: load(config_path, format_name)
+activate ConfigLoader
+ConfigLoader --> ActorAstParser: ParserConfig
+deactivate ConfigLoader
+
+ActorAstParser -> ParserRuntimeFactory: create(config)
+activate ParserRuntimeFactory
+ParserRuntimeFactory --> ActorAstParser: ParserRuntime\n(driver, coordinator, collector,\n reader, workers×N)
+deactivate ParserRuntimeFactory
+
+ActorAstParser -> Coordinator: put(ParseDocumentRequest)
+ActorAstParser -> Driver: drain()
+activate Driver
+
+== Этап 1: Чтение документа ==
+
+Driver -> Coordinator: step(1)
+activate Coordinator
+Coordinator -> Reader: tell(ReadDocumentRequest)
+deactivate Coordinator
+
+Driver -> Reader: step(1)
+activate Reader
+Reader --> Coordinator: tell(DocumentLoaded)
+deactivate Reader
+
+== Этап 2: Fan-out — сегментация и раздача ==
+
+Driver -> Coordinator: step(1)
+activate Coordinator
+note right of Coordinator
+  Сегментирует текст верхнего уровня
+  (page → 3 сегмента-абзаца).
+  Раздаёт round-robin по worker'ам.
+end note
+Coordinator -> W0: tell(BuildSubtreeRequest(0, seg0))
+Coordinator -> W1: tell(BuildSubtreeRequest(1, seg1))
+Coordinator -> W2: tell(BuildSubtreeRequest(2, seg2))
+deactivate Coordinator
+
+== Этап 3: Параллельная сборка поддеревьев ==
+
+Driver -> W0: step(1)
+activate W0
+Driver -> W1: step(1)
+activate W1
+Driver -> W2: step(1)
+activate W2
+
+note over W0, W2
+  Каждый worker строит полное поддерево
+  (paragraph → sentence → clause → word)
+  независимо от остальных.
+end note
+
+W1 --> Coordinator: tell(SubtreeCompleted(1, node1))
+deactivate W1
+W0 --> Coordinator: tell(SubtreeCompleted(0, node0))
+deactivate W0
+W2 --> Coordinator: tell(SubtreeCompleted(2, node2))
+deactivate W2
+
+== Этап 4: Fan-in — сборка результата ==
+
+Driver -> Coordinator: step(1)
+activate Coordinator
+note right of Coordinator
+  Все 3 поддерева получены.
+  Собирает AstDocument.
+end note
+Coordinator -> Collector: tell(ParseCompleted(document))
+deactivate Coordinator
+
+Driver -> Collector: step(1)
+activate Collector
+Collector --> Collector: result = document
+deactivate Collector
+
+deactivate Driver
+
+ActorAstParser --> Client: AstDocument
+
+@enduml

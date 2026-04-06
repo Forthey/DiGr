@@ -8,6 +8,7 @@
 - определяет формат
 - загружает `config/formats/<format>.yaml`
 - строит AST по правилам этого формата
+- собирает верхний уровень через координатор и достраивает поддеревья через worker-акторов
 
 Результат возвращается как [AstDocument](/home/forthey/projects/DiGr/src/document_ast/ast_document.py).
 
@@ -126,7 +127,33 @@ payload = document.to_dict()
 
 ## Как это связано с actor-моделью
 
-Внутри `ActorAstParser` создаётся runtime из четырёх акторов и [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py). Это значит, что весь разбор выполняется как последовательность сообщений между стадиями пайплайна, а не как один монолитный метод.
+Внутри `ActorAstParser` создаётся runtime из:
+
+- `ParserCoordinatorActor`
+- `DocumentReaderActor`
+- нескольких `SubtreeWorkerActor`
+- `ResultCollectorActor`
+
+По умолчанию factory создаёт `4` worker'а и использует [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py), но внутренний runtime типизирован через [ProceedableActorDriver](/home/forthey/projects/DiGr/src/actor/arch/proceedable_actor_driver.py).
+
+Это значит, что весь разбор выполняется не как один монолитный метод, а как fan-out/fan-in pipeline сообщений:
+
+1. reader загружает документ
+2. coordinator сегментирует верхний уровень
+3. worker'ы строят поддеревья
+4. coordinator собирает итоговый `AstDocument`
+5. collector сохраняет результат
+
+Если нужен прямой контроль над конфигурацией runtime, можно создавать фабрику напрямую:
+
+```python
+from document_ast.config_loader import ConfigLoader
+from document_ast.runtime import ParserRuntimeFactory
+
+
+config = ConfigLoader().load("config/formats/txt.yaml", expected_format_name="txt")
+runtime = ParserRuntimeFactory(worker_count=8).create(config)
+```
 
 Подробности:
 

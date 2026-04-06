@@ -17,6 +17,11 @@
 - хранить полное описание структуры формата рядом
 - расширять систему без изменения `AstBuilder`
 
+Текущий runtime использует этот конфиг в двух местах:
+
+- координатор сегментирует документ по `root_entity`
+- subtree-worker'ы рекурсивно достраивают дочерние уровни по `contains`
+
 ## Общая схема `<format>.yaml`
 
 Минимальная схема формата выглядит так:
@@ -151,6 +156,14 @@ word:
 - `split`
 - `match`
 
+В коде это реализовано через стратегический реестр в [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py):
+
+- `PassthroughStrategy`
+- `SplitStrategy`
+- `MatchStrategy`
+
+При необходимости можно зарегистрировать новый `segmenter.kind` без изменения существующих стратегий.
+
 ## `segmenter.kind: passthrough`
 
 `passthrough` не делит текст, а возвращает один сегмент, равный всему входу.
@@ -240,7 +253,7 @@ flags:
   - DOTALL
 ```
 
-Сейчас [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py) всегда включает `re.MULTILINE`, а затем добавляет перечисленные во `flags` значения.
+Сейчас [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py) всегда включает `re.MULTILINE`, а затем добавляет перечисленные во `flags` значения через `resolve_flags(...)`.
 
 Если передать неподдержанное имя, будет выброшена ошибка конфигурации.
 
@@ -300,6 +313,8 @@ page:
 - содержимым страницы являются абзацы
 
 Это важный архитектурный момент: сущность `page` здесь не захардкожена в коде. Она существует только потому, что так описано в конфиге.
+
+Именно по этой причине `ParserCoordinatorActor` сначала сегментирует документ на `page`, а уже потом раздаёт каждый сегмент worker'ам для рекурсивной сборки поддеревьев.
 
 ### Сущность `paragraph`
 

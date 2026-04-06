@@ -4,17 +4,19 @@ skinparam shadowing false
 skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
+title Sequence: Полный цикл парсинга документа (Fan-out / Fan-in)
+
 actor Client
 participant ActorAstParser
 participant ConfigLoader
 participant ParserRuntimeFactory
-participant ManualActorDriver
-participant ParserCoordinatorActor
-participant DocumentReaderActor
+participant ManualActorDriver as Driver
+participant ParserCoordinatorActor as Coordinator
+participant DocumentReaderActor as Reader
 participant SourceReaderRegistry
-participant AstBuilderActor
+participant "SubtreeWorkerActor[i]" as Worker
 participant AstBuilder
-participant ResultCollectorActor
+participant ResultCollectorActor as Collector
 
 Client -> ActorAstParser: parse(path, format_name?)
 activate ActorAstParser
@@ -30,66 +32,80 @@ deactivate ConfigLoader
 
 ActorAstParser -> ParserRuntimeFactory: create(config)
 activate ParserRuntimeFactory
-ParserRuntimeFactory -> ManualActorDriver: create step_limit=1
-ParserRuntimeFactory -> ResultCollectorActor: bind(driver)
-ParserRuntimeFactory -> ParserCoordinatorActor: bind(driver)
-ParserRuntimeFactory -> DocumentReaderActor: bind(driver)
-ParserRuntimeFactory -> AstBuilderActor: bind(driver)
-ParserRuntimeFactory -> ParserCoordinatorActor: set_reader(reader.as_handle())
-ParserRuntimeFactory -> ParserCoordinatorActor: set_builder(builder.as_handle())
+ParserRuntimeFactory -> Driver: create step_limit=1
+ParserRuntimeFactory -> Collector: bind(driver)
+ParserRuntimeFactory -> Reader: bind(driver)
+ParserRuntimeFactory -> Worker: bind(driver) × worker_count
+ParserRuntimeFactory -> Coordinator: bind(driver)
+ParserRuntimeFactory -> Reader: set_reply_to(coordinator.handle)
+ParserRuntimeFactory -> Worker: set_reply_to(coordinator.handle) × N
 ParserRuntimeFactory --> ActorAstParser: ParserRuntime
 deactivate ParserRuntimeFactory
 
-ActorAstParser -> ParserCoordinatorActor: put(ParseDocumentRequest)
+ActorAstParser -> Coordinator: put(ParseDocumentRequest)
 note right
   put() кладёт сообщение в mailbox
   и планирует актор в driver.
 end note
 
-ActorAstParser -> ManualActorDriver: drain()
-activate ManualActorDriver
+ActorAstParser -> Driver: drain()
+activate Driver
 
 loop while runnable actors exist
-  ManualActorDriver -> ParserCoordinatorActor: step(1)
-  activate ParserCoordinatorActor
-  ParserCoordinatorActor -> DocumentReaderActor: tell(ReadDocumentRequest)
-  deactivate ParserCoordinatorActor
 
-  ManualActorDriver -> DocumentReaderActor: step(1)
-  activate DocumentReaderActor
-  DocumentReaderActor -> SourceReaderRegistry: read(path, format_name, reader_config)
+  Driver -> Coordinator: step(1)
+  activate Coordinator
+  Coordinator -> Reader: tell(ReadDocumentRequest)
+  deactivate Coordinator
+
+  Driver -> Reader: step(1)
+  activate Reader
+  Reader -> SourceReaderRegistry: read(path, format_name, reader_config)
   activate SourceReaderRegistry
-  SourceReaderRegistry --> DocumentReaderActor: SourceDocument
+  SourceReaderRegistry --> Reader: SourceDocument
   deactivate SourceReaderRegistry
-  DocumentReaderActor -> ParserCoordinatorActor: tell(DocumentLoaded)
-  deactivate DocumentReaderActor
+  Reader -> Coordinator: tell(DocumentLoaded)
+  deactivate Reader
 
-  ManualActorDriver -> ParserCoordinatorActor: step(1)
-  activate ParserCoordinatorActor
-  ParserCoordinatorActor -> AstBuilderActor: tell(BuildAstRequest)
-  deactivate ParserCoordinatorActor
+  Driver -> Coordinator: step(1)
+  activate Coordinator
+  note right of Coordinator
+    Сегментация верхнего уровня.
+    Fan-out: N сегментов → N worker'ам.
+  end note
+  Coordinator -> Worker: tell(BuildSubtreeRequest) × N
+  deactivate Coordinator
 
-  ManualActorDriver -> AstBuilderActor: step(1)
-  activate AstBuilderActor
-  AstBuilderActor -> AstBuilder: build(SourceDocument)
+  Driver -> Worker: step(1)
+  activate Worker
+  Worker -> AstBuilder: build_entity_node(entity, segment)
   activate AstBuilder
-  AstBuilder --> AstBuilderActor: AstDocument
+  AstBuilder --> Worker: AstNode
   deactivate AstBuilder
-  AstBuilderActor -> ParserCoordinatorActor: tell(ParseCompleted)
-  deactivate AstBuilderActor
+  Worker -> Coordinator: tell(SubtreeCompleted)
+  deactivate Worker
 
-  ManualActorDriver -> ParserCoordinatorActor: step(1)
-  activate ParserCoordinatorActor
-  ParserCoordinatorActor -> ResultCollectorActor: tell(ParseCompleted)
-  deactivate ParserCoordinatorActor
+  note over Driver, Worker
+    Повторяется для каждого worker'а.
+    При ThreadedActorDriver — параллельно.
+  end note
 
-  ManualActorDriver -> ResultCollectorActor: step(1)
-  activate ResultCollectorActor
-  ResultCollectorActor --> ManualActorDriver: result stored
-  deactivate ResultCollectorActor
+  Driver -> Coordinator: step(1)
+  activate Coordinator
+  note right of Coordinator
+    Fan-in: все поддеревья получены.
+    Собирает AstDocument.
+  end note
+  Coordinator -> Collector: tell(ParseCompleted)
+  deactivate Coordinator
+
+  Driver -> Collector: step(1)
+  activate Collector
+  Collector --> Collector: result = document
+  deactivate Collector
 end
 
-deactivate ManualActorDriver
+deactivate Driver
 
 ActorAstParser --> Client: AstDocument
 deactivate ActorAstParser

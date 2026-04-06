@@ -76,8 +76,18 @@ package "document_ast.source" {
 }
 
 package "document_ast.segmentation" {
+  abstract class SegmentStrategy {
+    +segment(text, base_start, config)
+  }
+
+  class PassthroughStrategy
+  class SplitStrategy
+  class MatchStrategy
+
   class TextSegmenter {
-    +segment(text, base_start, segmenter_config)
+    -_strategies: dict
+    +register(kind, strategy)
+    +segment(text, base_start, config)
   }
 
   class TextSegment {
@@ -86,6 +96,10 @@ package "document_ast.segmentation" {
     +end: int
   }
 
+  SegmentStrategy <|-- PassthroughStrategy
+  SegmentStrategy <|-- SplitStrategy
+  SegmentStrategy <|-- MatchStrategy
+  TextSegmenter o-- "1..*" SegmentStrategy
   TextSegmenter --> "0..*" TextSegment : создаёт
 }
 
@@ -94,6 +108,7 @@ package "document_ast.model" {
     -_config: ParserConfig
     -_segmenter: TextSegmenter
     +build(document)
+    +build_entity_node(entity_name, segment)
   }
 
   class AstDocument {
@@ -123,11 +138,15 @@ package "document_ast.model" {
 }
 
 package "document_ast.runtime" {
-  enum ParseState {
+  enum CoordinatorState {
     IDLE
     WAITING_FOR_DOCUMENT
-    WAITING_FOR_AST
+    BUILDING_SUBTREES
     COMPLETED
+  }
+
+  enum WorkerState {
+    IDLE
   }
 
   class ParseDocumentRequest {
@@ -144,8 +163,15 @@ package "document_ast.runtime" {
     +document: SourceDocument
   }
 
-  class BuildAstRequest {
-    +document: SourceDocument
+  class BuildSubtreeRequest {
+    +segment_index: int
+    +entity_name: str
+    +segment: TextSegment
+  }
+
+  class SubtreeCompleted {
+    +segment_index: int
+    +node: AstNode
   }
 
   class ParseCompleted {
@@ -153,32 +179,36 @@ package "document_ast.runtime" {
   }
 
   class ParserRuntime {
-    +driver: ManualActorDriver
+    +driver: ProceedableActorDriver
     +coordinator: ParserCoordinatorActor
     +collector: ResultCollectorActor
   }
 
   class ParserRuntimeFactory {
+    -_worker_count: int
+    -_driver_factory
     +create(config)
   }
 
   class ParserCoordinatorActor {
+    -_config: ParserConfig
     -_reader: ActorHandle
-    -_builder: ActorHandle
+    -_workers: list[ActorHandle]
     -_collector: ActorHandle
-    +set_reader(reader)
-    +set_builder(builder)
+    -_segmenter: TextSegmenter
   }
 
   class DocumentReaderActor {
     -_config: ParserConfig
     -_reply_to: ActorHandle
     -_registry: SourceReaderRegistry
+    +set_reply_to(handle)
   }
 
-  class AstBuilderActor {
+  class SubtreeWorkerActor {
     -_builder: AstBuilder
     -_reply_to: ActorHandle
+    +set_reply_to(handle)
   }
 
   class ResultCollectorActor {
@@ -188,36 +218,37 @@ package "document_ast.runtime" {
   ParserRuntimeFactory --> ParserRuntime : создаёт
   ParserRuntimeFactory --> ParserCoordinatorActor : создаёт
   ParserRuntimeFactory --> DocumentReaderActor : создаёт
-  ParserRuntimeFactory --> AstBuilderActor : создаёт
+  ParserRuntimeFactory --> SubtreeWorkerActor : создаёт ×N
   ParserRuntimeFactory --> ResultCollectorActor : создаёт
 
   ParserRuntime *-- "1" ManualActorDriver
   ParserRuntime *-- "1" ParserCoordinatorActor
   ParserRuntime *-- "1" ResultCollectorActor
 
-  ParserCoordinatorActor --> ActorHandle : использует
+  ParserCoordinatorActor --> ActorHandle : reader, workers[], collector
   DocumentReaderActor --> ActorHandle : reply_to
-  AstBuilderActor --> ActorHandle : reply_to
+  SubtreeWorkerActor --> ActorHandle : reply_to
 
   ParserCoordinatorActor --> ReadDocumentRequest
-  ParserCoordinatorActor --> BuildAstRequest
-  ParserCoordinatorActor --> ParseCompleted
+  ParserCoordinatorActor --> BuildSubtreeRequest
   DocumentReaderActor --> DocumentLoaded
-  AstBuilderActor --> ParseCompleted
+  SubtreeWorkerActor --> SubtreeCompleted
+  ParserCoordinatorActor --> ParseCompleted
 
   DocumentReaderActor --> ParserConfig
   DocumentReaderActor --> SourceReaderRegistry
-  AstBuilderActor --> AstBuilder
+  SubtreeWorkerActor --> AstBuilder
   ResultCollectorActor --> AstDocument
 
   DocumentLoaded --> SourceDocument
-  BuildAstRequest --> SourceDocument
+  BuildSubtreeRequest --> TextSegment
+  SubtreeCompleted --> AstNode
   ParseCompleted --> AstDocument
 }
 
 Actor <|-- ParserCoordinatorActor
 Actor <|-- DocumentReaderActor
-Actor <|-- AstBuilderActor
+Actor <|-- SubtreeWorkerActor
 Actor <|-- ResultCollectorActor
 
 ActorAstParser --> ConfigLoader
@@ -234,10 +265,9 @@ note bottom of ParserConfig
   root_entity обязан ссылаться на существующую сущность.
 end note
 
-note bottom of ParserRuntime
-  Runtime хранит только driver, coordinator и collector.
-  Reader и builder создаются factory и связываются
-  с coordinator через ActorHandle.
+note bottom of ParserRuntimeFactory
+  worker_count и driver_factory настраиваемы.
+  По умолчанию: 4 worker'а, ManualActorDriver.
 end note
 
 @enduml

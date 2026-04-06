@@ -9,6 +9,11 @@
 - конфигурация формата описывает, какие сущности есть в документе и как они выделяются из текста
 - actor-пайплайн исполняет разбор как последовательность сообщений между специализированными акторами
 
+Текущая реализация делает это в два уровня:
+
+- координатор сначала выделяет сегменты верхнего уровня для `root_entity`
+- затем эти сегменты fan-out'ом раздаются worker-акторам, которые строят поддеревья независимо друг от друга
+
 Из этого следует важный принцип: код парсера не знает заранее про `word`, `sentence`, `paragraph`, `page` или любые другие сущности. Он знает только про:
 
 - формат
@@ -75,30 +80,49 @@
 
 Распределение ответственности следующее:
 
-- `TextSegmenter` реализует примитивы сегментации `passthrough`, `split`, `match`
+- `TextSegmenter` работает как реестр стратегий сегментации
+- `PassthroughStrategy`, `SplitStrategy`, `MatchStrategy` реализуют конкретные виды сегментации
 - `AstBuilder` рекурсивно проходит по иерархии `root_entity -> contains -> contains -> ...`
 - `AstNode` хранит узел дерева вместе с диапазоном `start/end`
 - `AstDocument` хранит корень AST и метаданные результата
 
-`AstBuilder` не содержит хардкода предметных сущностей. Он просто берёт очередную сущность из `ParserConfig`, сегментирует текст по её правилам и, если указано `contains`, рекурсивно строит дочерние узлы.
+`TextSegmenter` больше не зашит как один набор `if/elif`, а позволяет регистрировать новые стратегии через `register(kind, strategy)`.
+
+`AstBuilder` не содержит хардкода предметных сущностей. Он просто берёт очередную сущность из `ParserConfig`, сегментирует текст по её правилам и, если указано `contains`, рекурсивно строит дочерние узлы. В текущем runtime worker'ы используют для этого метод `build_entity_node(...)`, то есть строят не целый документ, а отдельные поддеревья.
 
 ### 5. Actor-runtime
 
-Исполнение построено через четыре специализированных актора:
+Исполнение построено через один координатор, один reader, набор worker-акторов и collector:
 
 - [ParserCoordinatorActor](/home/forthey/projects/DiGr/src/document_ast/actors/parser_coordinator_actor.py)
 - [DocumentReaderActor](/home/forthey/projects/DiGr/src/document_ast/actors/document_reader_actor.py)
-- [AstBuilderActor](/home/forthey/projects/DiGr/src/document_ast/actors/ast_builder_actor.py)
+- [SubtreeWorkerActor](/home/forthey/projects/DiGr/src/document_ast/actors/subtree_worker_actor.py)
 - [ResultCollectorActor](/home/forthey/projects/DiGr/src/document_ast/actors/result_collector_actor.py)
 
-Runtime создаётся в [ParserRuntimeFactory](/home/forthey/projects/DiGr/src/document_ast/runtime.py) и сейчас использует [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py) со `step_limit=1`.
+Runtime создаётся в [ParserRuntimeFactory](/home/forthey/projects/DiGr/src/document_ast/runtime.py). Фабрика параметризуется:
+
+- `worker_count`: число subtree-worker'ов, по умолчанию `4`
+- `driver_factory`: класс драйвера, по умолчанию [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py)
+
+В сам `ParserRuntime` наружу отдаются:
+
+- `driver`
+- `coordinator`
+- `collector`
+
+Reader и worker'ы остаются внутренними деталями runtime factory.
 
 Роли акторов:
 
 - `ParserCoordinatorActor` управляет жизненным циклом разбора
 - `DocumentReaderActor` читает исходный документ через registry
-- `AstBuilderActor` превращает `SourceDocument` в `AstDocument`
+- `SubtreeWorkerActor` строит поддерево для одного сегмента верхнего уровня
 - `ResultCollectorActor` сохраняет итоговый результат
+
+Состояния также разделены:
+
+- `CoordinatorState`: `IDLE`, `WAITING_FOR_DOCUMENT`, `BUILDING_SUBTREES`, `COMPLETED`
+- `WorkerState`: `IDLE`
 
 ## Жизненный цикл разбора
 
@@ -108,16 +132,20 @@ Runtime создаётся в [ParserRuntimeFactory](/home/forthey/projects/DiGr
 2. Загружается `config/formats/<format>.yaml`
 3. `ParserRuntimeFactory` создаёт driver и акторы
 4. В `ParserCoordinatorActor` отправляется `ParseDocumentRequest`
-5. `ManualActorDriver.drain()` начинает по одному шагу выполнять runnable-акторов
+5. Вызывается `runtime.driver.drain()`, то есть запускается `ProceedableActorDriver`
 6. `ParserCoordinatorActor` отправляет `ReadDocumentRequest` в `DocumentReaderActor`
 7. `DocumentReaderActor` читает источник и возвращает `DocumentLoaded`
-8. `ParserCoordinatorActor` отправляет `BuildAstRequest` в `AstBuilderActor`
-9. `AstBuilderActor` вызывает `AstBuilder.build()` и получает `AstDocument`
-10. `AstBuilderActor` отправляет `ParseCompleted`
-11. `ParserCoordinatorActor` пересылает результат в `ResultCollectorActor`
-12. `ActorAstParser` забирает `collector.result` и возвращает `AstDocument`
+8. `ParserCoordinatorActor` сегментирует текст верхнего уровня по `root_entity`
+9. Для каждого сегмента координатор отправляет `BuildSubtreeRequest` одному из `SubtreeWorkerActor`
+10. Worker строит поддерево через `AstBuilder.build_entity_node(...)`
+11. Worker отправляет `SubtreeCompleted`
+12. Координатор собирает все результаты в правильном порядке и формирует `AstDocument`
+13. Координатор отправляет `ParseCompleted` в `ResultCollectorActor`
+14. `ActorAstParser` забирает `collector.result` и возвращает `AstDocument`
 
 Это означает, что actor-модель здесь используется не как украшение, а как явный execution model для стадий разбора.
+
+Важно: fan-out/fan-in здесь логический. При `ManualActorDriver` выполнение всё равно идёт детерминированно по шагам. При другой реализации `ProceedableActorDriver` та же схема может исполняться иначе.
 
 ## Как AST-парсер использует actor-архитектуру
 
@@ -125,12 +153,13 @@ AST-подсистема опирается только на несколько
 
 - [Actor](/home/forthey/projects/DiGr/src/actor/arch/actor.py): базовый класс всех AST-акторов
 - [ActorHandle](/home/forthey/projects/DiGr/src/actor/handles/actor_handle.py): передача сообщений между акторами без прямой зависимости на объект актора
-- [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py): детерминированное исполнение пайплайна
+- [ProceedableActorDriver](/home/forthey/projects/DiGr/src/actor/arch/proceedable_actor_driver.py): минимальный контракт драйвера для AST-runtime
+- [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py): реализация по умолчанию
 
 Это даёт два полезных свойства:
 
 - прикладная логика разбора отделена от механики планирования и mailbox
-- тот же пайплайн можно в будущем запускать на другом драйвере, если это понадобится
+- runtime уже сейчас типизирован против `ProceedableActorDriver`, а не против конкретного `ManualActorDriver`
 
 ## Расширяемость
 
@@ -164,6 +193,12 @@ AST-подсистема опирается только на несколько
 
 - [ast_parser_architecture.puml](/home/forthey/projects/DiGr/docs/uml/ast_parser_architecture.puml): class diagram структуры подсистемы
 - [ast_parser_sequence.puml](/home/forthey/projects/DiGr/docs/uml/ast_parser_sequence.puml): sequence diagram процесса разбора
+
+Дополнительно есть более узкие диаграммы текущей логики runtime:
+
+- [component_overview.puml](/home/forthey/projects/DiGr/docs/uml/component_overview.puml): компонентный обзор проекта
+- [coordinator_state_machine.puml](/home/forthey/projects/DiGr/docs/uml/coordinator_state_machine.puml): state machine координатора
+- [fanout_sequence.puml](/home/forthey/projects/DiGr/docs/uml/fanout_sequence.puml): fan-out/fan-in сценарий по worker-акторам
 
 При построении диаграмм соблюдены следующие правила моделирования:
 
