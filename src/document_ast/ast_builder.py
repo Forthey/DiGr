@@ -26,7 +26,7 @@ class AstBuilder:
             start=0,
             end=len(document.text),
             children=[
-                self._build_entity_node(root_entity, segment)
+                self.build_entity_node(root_entity, segment)
                 for segment in self._segment_entity(root_entity, document.text, 0)
             ],
             metadata={"format": document.format_name, "source_path": document.path},
@@ -38,12 +38,12 @@ class AstBuilder:
             root=root_node,
         )
 
-    def _build_entity_node(self, entity_name: str, segment: TextSegment) -> AstNode:
+    def build_entity_node(self, entity_name: str, segment: TextSegment) -> AstNode:
         entity_config = self._config.get_entity(entity_name)
         children: list[AstNode] = []
         if entity_config.contains:
             children = [
-                self._build_entity_node(entity_config.contains, child_segment)
+                self.build_entity_node(entity_config.contains, child_segment)
                 for child_segment in self._segment_entity(
                     entity_config.contains,
                     segment.text,

@@ -2,30 +2,54 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from actor import ManualActorDriver
+from actor import ManualActorDriver, ProceedableActorDriver
 
-from .actors import AstBuilderActor, DocumentReaderActor, ParserCoordinatorActor, ResultCollectorActor
+from .actors import DocumentReaderActor, ParserCoordinatorActor, ResultCollectorActor, SubtreeWorkerActor
 from .parser_config import ParserConfig
 
 
 @dataclass(slots=True)
 class ParserRuntime:
-    driver: ManualActorDriver
+    driver: ProceedableActorDriver
     coordinator: ParserCoordinatorActor
     collector: ResultCollectorActor
 
 
 class ParserRuntimeFactory:
+    def __init__(
+            self,
+            worker_count: int = 4,
+            driver_factory: type[ProceedableActorDriver] | None = None,
+    ) -> None:
+        self._worker_count = max(1, worker_count)
+        self._driver_factory = driver_factory or ManualActorDriver
+
     def create(self, config: ParserConfig) -> ParserRuntime:
-        driver = ManualActorDriver(step_limit=1)
-        collector = ResultCollectorActor().bind(driver)
+        driver = self._driver_factory(step_limit=1)
+
+        collector = ResultCollectorActor()
+        collector.bind(driver)
+
+        reader = DocumentReaderActor(config)
+        reader.bind(driver)
+
+        workers = []
+        for _ in range(self._worker_count):
+            worker = SubtreeWorkerActor(config)
+            worker.bind(driver)
+            workers.append(worker)
+
         coordinator = ParserCoordinatorActor(
-            reader=None,
-            builder=None,
+            config=config,
+            reader=reader.as_handle(),
+            workers=[w.as_handle() for w in workers],
             collector=collector.as_handle(),
-        ).bind(driver)
-        reader = DocumentReaderActor(config, coordinator.as_handle()).bind(driver)
-        builder = AstBuilderActor(config, coordinator.as_handle()).bind(driver)
-        coordinator.set_reader(reader.as_handle())
-        coordinator.set_builder(builder.as_handle())
+        )
+        coordinator.bind(driver)
+
+        coordinator_handle = coordinator.as_handle()
+        reader.set_reply_to(coordinator_handle)
+        for worker in workers:
+            worker.set_reply_to(coordinator_handle)
+
         return ParserRuntime(driver=driver, coordinator=coordinator, collector=collector)

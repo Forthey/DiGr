@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Union
 
 from .ast_document import AstDocument
+from .ast_node import AstNode
 from .source_document import SourceDocument
+from .text_segment import TextSegment
 
 
 @dataclass(slots=True)
@@ -24,10 +27,32 @@ class DocumentLoaded:
 
 
 @dataclass(slots=True)
-class BuildAstRequest:
-    document: SourceDocument
+class BuildSubtreeRequest:
+    segment_index: int
+    entity_name: str
+    segment: TextSegment
+
+
+@dataclass(slots=True)
+class SubtreeCompleted:
+    segment_index: int
+    node: AstNode
 
 
 @dataclass(slots=True)
 class ParseCompleted:
     document: AstDocument
+
+
+CoordinatorMessage = Union[
+    ParseDocumentRequest,
+    DocumentLoaded,
+    SubtreeCompleted,
+    ParseCompleted,
+]
+
+ReaderMessage = Union[ReadDocumentRequest]
+
+WorkerMessage = Union[BuildSubtreeRequest]
+
+CollectorMessage = Union[ParseCompleted]

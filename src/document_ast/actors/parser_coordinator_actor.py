@@ -1,50 +1,118 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from actor import Actor, ActorHandle
 
-from ..messages import BuildAstRequest, DocumentLoaded, ParseCompleted, ParseDocumentRequest, ReadDocumentRequest
-from ..parse_state import ParseState
+from ..ast_document import AstDocument
+from ..ast_node import AstNode
+from ..messages import (
+    BuildSubtreeRequest,
+    CoordinatorMessage,
+    DocumentLoaded,
+    ParseCompleted,
+    ParseDocumentRequest,
+    ReadDocumentRequest,
+    SubtreeCompleted,
+)
+from ..parse_state import CoordinatorState
+from ..parser_config import ParserConfig
+from ..source_document import SourceDocument
+from ..text_segmenter import TextSegmenter
 
 
-class ParserCoordinatorActor(Actor[ParseState, object, object]):
+class ParserCoordinatorActor(Actor[CoordinatorState, CoordinatorMessage, CoordinatorMessage]):
     def __init__(
             self,
-            reader: ActorHandle[object] | None,
-            builder: ActorHandle[object] | None,
+            config: ParserConfig,
+            reader: ActorHandle[object],
+            workers: list[ActorHandle[object]],
             collector: ActorHandle[object],
+            segmenter: TextSegmenter | None = None,
     ) -> None:
-        super().__init__(ParseState, ParseState.IDLE)
+        super().__init__(CoordinatorState, CoordinatorState.IDLE)
+        self._config = config
         self._reader = reader
-        self._builder = builder
+        self._workers = workers
         self._collector = collector
+        self._segmenter = segmenter or TextSegmenter()
 
-    def set_reader(self, reader: ActorHandle[object]) -> None:
-        self._reader = reader
+        self._pending_count: int = 0
+        self._subtree_results: dict[int, AstNode] = {}
+        self._document: SourceDocument | None = None
 
-    def set_builder(self, builder: ActorHandle[object]) -> None:
-        self._builder = builder
-
-    def on_idle_parse_document_request(self, message: ParseDocumentRequest) -> ParseState:
-        format_name = message.format_name or self._detect_format(message.path)
-        if self._reader is None:
-            raise RuntimeError("reader actor is not configured")
+    def on_idle_parse_document_request(self, message: ParseDocumentRequest) -> CoordinatorState:
+        format_name = message.format_name
+        if format_name is None:
+            raise ValueError("format_name must be resolved before sending to coordinator")
         self._reader.tell(ReadDocumentRequest(path=message.path, format_name=format_name))
-        return ParseState.WAITING_FOR_DOCUMENT
+        return CoordinatorState.WAITING_FOR_DOCUMENT
 
-    def on_waiting_for_document_document_loaded(self, message: DocumentLoaded) -> ParseState:
-        if self._builder is None:
-            raise RuntimeError("builder actor is not configured")
-        self._builder.tell(BuildAstRequest(document=message.document))
-        return ParseState.WAITING_FOR_AST
+    def on_waiting_for_document_document_loaded(self, message: DocumentLoaded) -> CoordinatorState:
+        doc = message.document
+        self._document = doc
 
-    def on_waiting_for_ast_parse_completed(self, message: ParseCompleted) -> ParseState:
-        self._collector.tell(message)
-        return ParseState.COMPLETED
+        root_entity_name = self._config.format_config.root_entity
+        root_entity_config = self._config.get_entity(root_entity_name)
+        segments = self._segmenter.segment(doc.text, 0, root_entity_config.segmenter)
 
-    def _detect_format(self, path: str) -> str:
-        suffix = Path(path).suffix.lower().lstrip(".")
-        if not suffix:
-            raise ValueError(f"Cannot detect format from path without extension: {path}")
-        return suffix
+        if not segments:
+            return self._finalize_with_no_children(doc, root_entity_name)
+
+        self._pending_count = len(segments)
+        self._subtree_results = {}
+
+        for i, segment in enumerate(segments):
+            worker_index = i % len(self._workers)
+            self._workers[worker_index].tell(BuildSubtreeRequest(
+                segment_index=i,
+                entity_name=root_entity_name,
+                segment=segment,
+            ))
+
+        return CoordinatorState.BUILDING_SUBTREES
+
+    def on_building_subtrees_subtree_completed(self, message: SubtreeCompleted) -> CoordinatorState:
+        self._subtree_results[message.segment_index] = message.node
+
+        if len(self._subtree_results) < self._pending_count:
+            return CoordinatorState.BUILDING_SUBTREES
+
+        doc = self._document
+        assert doc is not None
+        children = [self._subtree_results[i] for i in range(self._pending_count)]
+
+        root = AstNode(
+            entity="document",
+            text=doc.text,
+            start=0,
+            end=len(doc.text),
+            children=children,
+            metadata={"format": doc.format_name, "source_path": doc.path},
+        )
+        ast_doc = AstDocument(
+            source_path=doc.path,
+            format_name=doc.format_name,
+            root_entity=self._config.format_config.root_entity,
+            root=root,
+        )
+        self._collector.tell(ParseCompleted(document=ast_doc))
+        return CoordinatorState.COMPLETED
+
+    def _finalize_with_no_children(
+            self, doc: SourceDocument, root_entity_name: str,
+    ) -> CoordinatorState:
+        root = AstNode(
+            entity="document",
+            text=doc.text,
+            start=0,
+            end=len(doc.text),
+            children=[],
+            metadata={"format": doc.format_name, "source_path": doc.path},
+        )
+        ast_doc = AstDocument(
+            source_path=doc.path,
+            format_name=doc.format_name,
+            root_entity=root_entity_name,
+            root=root,
+        )
+        self._collector.tell(ParseCompleted(document=ast_doc))
+        return CoordinatorState.COMPLETED

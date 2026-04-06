@@ -3,19 +3,15 @@ from __future__ import annotations
 from actor import Actor
 
 from ..ast_document import AstDocument
-from ..messages import ParseCompleted
-from ..parse_state import ParseState
+from ..messages import CollectorMessage, ParseCompleted
+from ..parse_state import WorkerState
 
 
-class ResultCollectorActor(Actor[ParseState, object, object]):
+class ResultCollectorActor(Actor[WorkerState, CollectorMessage, CollectorMessage]):
     def __init__(self) -> None:
-        super().__init__(ParseState, ParseState.IDLE)
+        super().__init__(WorkerState, WorkerState.IDLE)
         self.result: AstDocument | None = None
 
-    def on_idle_parse_completed(self, message: ParseCompleted) -> ParseState:
+    def on_idle_parse_completed(self, message: ParseCompleted) -> WorkerState:
         self.result = message.document
-        return ParseState.COMPLETED
-
-    def on_completed_parse_completed(self, message: ParseCompleted) -> ParseState:
-        self.result = message.document
-        return ParseState.COMPLETED
+        return WorkerState.IDLE
