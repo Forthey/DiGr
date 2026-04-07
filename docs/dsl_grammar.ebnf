@@ -1,0 +1,136 @@
+(* DiGr DSL grammar, v1.
+   Назначение: декларативный поиск контекстных окон и выборка узлов
+   поверх AST документа.
+
+   В грамматике есть две формы запроса:
+
+   1. CONTEXT-query
+      Основная форма для задачи из pre_tz.md:
+      поиск непрерывного контекстного окна по базовой сущности
+      с ограничениями на структурные контейнеры.
+
+   2. FIND-query
+      Более общий селекторный запрос по AST.
+
+   Имена entity не захардкожены грамматикой. Они должны валидироваться
+   относительно AST / ParserConfig конкретного формата.
+*)
+
+query                = context_query | find_query ;
+
+context_query        = "CONTEXT" , span_spec ,
+                       "FOR" , pattern_list ,
+                       { within_clause } ,
+                       [ where_clause ] ,
+                       [ return_clause ] ,
+                       [ ";" ] ;
+
+find_query           = "FIND" , entity_name ,
+                       [ where_clause ] ,
+                       { within_clause } ,
+                       [ return_clause ] ,
+                       [ ";" ] ;
+
+span_spec            = entity_name , "[" , count_constraint , "]" ;
+within_clause        = "WITHIN" , entity_name , "[" , count_constraint , "]" ;
+
+count_constraint     = count_operator , integer ;
+count_operator       = "=" | "<=" | "<" | ">=" | ">" ;
+
+pattern_list         = pattern , { "," , pattern } ;
+pattern              = [ alias , ":" ] , pattern_source ;
+pattern_source       = string_literal | regex_literal | selector ;
+
+where_clause         = "WHERE" , boolean_expr ;
+
+selector             = entity_name
+                     | entity_name , "[" , boolean_expr , "]" ;
+
+boolean_expr         = disjunction ;
+disjunction          = conjunction , { "OR" , conjunction } ;
+conjunction          = negation , { "AND" , negation } ;
+negation             = [ "NOT" ] , predicate ;
+
+predicate            = comparison
+                     | function_call
+                     | "(" , boolean_expr , ")" ;
+
+comparison           = field_ref , comparison_op , value ;
+comparison_op        = "=" | "!=" | "~=" | "!~=" | "<" | "<=" | ">" | ">=" ;
+
+function_call        = function_name , "(" , [ argument_list ] , ")" ;
+argument_list        = argument , { "," , argument } ;
+argument             = selector | value | field_ref | span_spec ;
+
+function_name        = "has_child"
+                     | "has_descendant"
+                     | "has_ancestor"
+                     | "contains"
+                     | "follows"
+                     | "precedes"
+                     | "intersects"
+                     | "inside"
+                     | identifier ;
+
+field_ref            = identifier , { "." , identifier } ;
+
+return_clause        = "RETURN" , return_item , { "," , return_item } ;
+return_item          = "window"
+                     | "text"
+                     | "span"
+                     | "matches"
+                     | "nodes"
+                     | "count"
+                     | "source"
+                     | identifier ;
+
+entity_name          = identifier ;
+alias                = identifier ;
+
+value                = string_literal
+                     | regex_literal
+                     | integer
+                     | boolean
+                     | null ;
+
+boolean              = "true" | "false" ;
+null                 = "null" ;
+
+identifier           = letter , { letter | digit | "_" } ;
+integer              = digit , { digit } ;
+
+string_literal       = '"' , { string_character } , '"' ;
+string_character     = escape_sequence | ? any Unicode character except " and \ ? ;
+
+regex_literal        = "/" , { regex_character } , "/" , { regex_flag } ;
+regex_character      = escape_sequence | ? any Unicode character except / and \ ? ;
+regex_flag           = "i" | "m" | "s" | "u" ;
+
+escape_sequence      = "\" , ( "\" | "/" | "b" | "f" | "n" | "r" | "t" ) ;
+
+letter               = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J"
+                     | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T"
+                     | "U" | "V" | "W" | "X" | "Y" | "Z"
+                     | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+                     | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+                     | "u" | "v" | "w" | "x" | "y" | "z" ;
+
+digit                = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+(* Нормативные примеры:
+
+   CONTEXT sentence[<=10]
+   FOR "ключ", "ассоциативная память"
+   WITHIN paragraph[=1]
+   RETURN window, matches;
+
+   CONTEXT sentence[<=10]
+   FOR a: word[text = "ключ"], b: clause[text ~= /ассоциативная память/i]
+   WITHIN paragraph[<=2]
+   WITHIN page[=1]
+   RETURN text, span, matches;
+
+   FIND sentence
+   WHERE has_child(word[text ~= /не.*/]) AND has_descendant(word[text = "тишина"])
+   RETURN nodes, count;
+*)

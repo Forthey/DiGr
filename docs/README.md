@@ -11,6 +11,11 @@
 - [Конфигурация AST-парсера](./ast_parser_configuration.md): полная схема `<format>.yaml`, правила валидации и подробный разбор `txt.yaml`
 - [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md): запуск через CLI и Python API, а также расширение на новые форматы
 
+## DSL
+
+- [EBNF-грамматика DSL](./dsl_grammar.ebnf): формальная грамматика запросов `CONTEXT` и `FIND` поверх AST
+- [Описание DSL](./dsl_language.md): семантика языка, операторов и контекстных окон с примерами
+
 ## UML
 
 - [Полная UML-диаграмма actor-архитектуры](./uml/actor_architecture.puml)
