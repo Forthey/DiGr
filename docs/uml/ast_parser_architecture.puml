@@ -6,21 +6,6 @@ skinparam classAttributeIconSize 0
 skinparam shadowing false
 hide empty members
 
-package "actor.api" {
-  abstract class Actor
-  class ActorHandle
-  class ManualActorDriver
-}
-
-package "document_ast.api" {
-  class ActorAstParser {
-    -_config_dir: Path
-    -_loader: ConfigLoader
-    +from_config_dir(path)
-    +parse(path, format_name)
-  }
-}
-
 package "document_ast.config" {
   class ConfigLoader {
     +load(path, expected_format_name)
@@ -149,37 +134,8 @@ package "document_ast.runtime" {
     IDLE
   }
 
-  class ParseDocumentRequest {
-    +path: str
-    +format_name: str
-  }
-
-  class ReadDocumentRequest {
-    +path: str
-    +format_name: str
-  }
-
-  class DocumentLoaded {
-    +document: SourceDocument
-  }
-
-  class BuildSubtreeRequest {
-    +segment_index: int
-    +entity_name: str
-    +segment: TextSegment
-  }
-
-  class SubtreeCompleted {
-    +segment_index: int
-    +node: AstNode
-  }
-
-  class ParseCompleted {
-    +document: AstDocument
-  }
-
   class ParserRuntime {
-    +driver: ProceedableActorDriver
+    +driver
     +coordinator: ParserCoordinatorActor
     +collector: ResultCollectorActor
   }
@@ -192,22 +148,25 @@ package "document_ast.runtime" {
 
   class ParserCoordinatorActor {
     -_config: ParserConfig
-    -_reader: ActorHandle
-    -_workers: list[ActorHandle]
-    -_collector: ActorHandle
+    -_reader
+    -_workers: list
+    -_collector
+    -_pending_count: int
+    -_subtree_results: dict
+    -_document: SourceDocument
     -_segmenter: TextSegmenter
   }
 
   class DocumentReaderActor {
     -_config: ParserConfig
-    -_reply_to: ActorHandle
+    -_reply_to
     -_registry: SourceReaderRegistry
     +set_reply_to(handle)
   }
 
   class SubtreeWorkerActor {
     -_builder: AstBuilder
-    -_reply_to: ActorHandle
+    -_reply_to
     +set_reply_to(handle)
   }
 
@@ -216,58 +175,24 @@ package "document_ast.runtime" {
   }
 
   ParserRuntimeFactory --> ParserRuntime : создаёт
+  ParserRuntimeFactory --> ParserConfig
   ParserRuntimeFactory --> ParserCoordinatorActor : создаёт
   ParserRuntimeFactory --> DocumentReaderActor : создаёт
   ParserRuntimeFactory --> SubtreeWorkerActor : создаёт ×N
   ParserRuntimeFactory --> ResultCollectorActor : создаёт
 
-  ParserRuntime *-- "1" ManualActorDriver
   ParserRuntime *-- "1" ParserCoordinatorActor
   ParserRuntime *-- "1" ResultCollectorActor
 
-  ParserCoordinatorActor --> ActorHandle : reader, workers[], collector
-  DocumentReaderActor --> ActorHandle : reply_to
-  SubtreeWorkerActor --> ActorHandle : reply_to
-
-  ParserCoordinatorActor --> ReadDocumentRequest
-  ParserCoordinatorActor --> BuildSubtreeRequest
-  DocumentReaderActor --> DocumentLoaded
-  SubtreeWorkerActor --> SubtreeCompleted
-  ParserCoordinatorActor --> ParseCompleted
-
+  ParserCoordinatorActor --> ParserConfig
+  ParserCoordinatorActor --> TextSegmenter
+  ParserCoordinatorActor --> SourceDocument
+  ParserCoordinatorActor --> AstDocument
   DocumentReaderActor --> ParserConfig
   DocumentReaderActor --> SourceReaderRegistry
+  DocumentReaderActor --> SourceDocument
   SubtreeWorkerActor --> AstBuilder
+  SubtreeWorkerActor --> AstNode
   ResultCollectorActor --> AstDocument
-
-  DocumentLoaded --> SourceDocument
-  BuildSubtreeRequest --> TextSegment
-  SubtreeCompleted --> AstNode
-  ParseCompleted --> AstDocument
 }
-
-Actor <|-- ParserCoordinatorActor
-Actor <|-- DocumentReaderActor
-Actor <|-- SubtreeWorkerActor
-Actor <|-- ResultCollectorActor
-
-ActorAstParser --> ConfigLoader
-ActorAstParser --> ParserRuntimeFactory
-ActorAstParser --> AstDocument : возвращает
-
-note right of ActorAstParser
-  Формат определяется по расширению файла,
-  если format_name не передан явно.
-end note
-
-note bottom of ParserConfig
-  Иерархия entities должна быть ацикличной.
-  root_entity обязан ссылаться на существующую сущность.
-end note
-
-note bottom of ParserRuntimeFactory
-  worker_count и driver_factory настраиваемы.
-  По умолчанию: 4 worker'а, ManualActorDriver.
-end note
-
 @enduml
