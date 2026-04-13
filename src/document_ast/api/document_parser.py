@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .ast_document import AstDocument
-from .config_loader import ConfigLoader
-from .messages import ParseDocumentRequest
-from .runtime import ParserRuntimeFactory
+from ..config.config_loader import ConfigLoader
+from ..model.ast_document import AstDocument
+from ..runtime.messages import ParseDocumentRequest
+from ..runtime.pipeline_runtime import ParserRuntimeFactory
 
 
 class ActorAstParser:

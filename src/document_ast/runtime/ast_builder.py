@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .ast_document import AstDocument
-from .ast_node import AstNode
-from .parser_config import ParserConfig
-from .source_document import SourceDocument
-from .text_segment import TextSegment
-from .text_segmenter import TextSegmenter
+from ..config.parser_config import ParserConfig
+from ..model.ast_document import AstDocument
+from ..model.ast_node import AstNode
+from ..model.source_document import SourceDocument
+from ..segmentation.text_segment import TextSegment
+from ..segmentation.text_segmenter import TextSegmenter
 
 
 class AstBuilder:

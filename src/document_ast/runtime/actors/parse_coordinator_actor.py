@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from actor import Actor, ActorHandle
 
-from ..ast_document import AstDocument
-from ..ast_node import AstNode
+from ...config.parser_config import ParserConfig
+from ...model.ast_document import AstDocument
+from ...model.ast_node import AstNode
+from ...model.source_document import SourceDocument
+from ...segmentation.text_segmenter import TextSegmenter
 from ..messages import (
     BuildSubtreeRequest,
     CoordinatorMessage,
@@ -13,13 +16,10 @@ from ..messages import (
     ReadDocumentRequest,
     SubtreeCompleted,
 )
-from ..parse_state import CoordinatorState
-from ..parser_config import ParserConfig
-from ..source_document import SourceDocument
-from ..text_segmenter import TextSegmenter
+from ..states import CoordinatorState
 
 
-class ParserCoordinatorActor(Actor[CoordinatorState, CoordinatorMessage, CoordinatorMessage]):
+class ParseCoordinatorActor(Actor[CoordinatorState, CoordinatorMessage, CoordinatorMessage]):
     def __init__(
             self,
             config: ParserConfig,
@@ -116,3 +116,6 @@ class ParserCoordinatorActor(Actor[CoordinatorState, CoordinatorMessage, Coordin
         )
         self._collector.tell(ParseCompleted(document=ast_doc))
         return CoordinatorState.COMPLETED
+
+
+ParserCoordinatorActor = ParseCoordinatorActor

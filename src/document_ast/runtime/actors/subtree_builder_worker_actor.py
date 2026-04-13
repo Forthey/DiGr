@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from actor import Actor, ActorHandle
 
+from ...config.parser_config import ParserConfig
 from ..ast_builder import AstBuilder
 from ..messages import BuildSubtreeRequest, SubtreeCompleted, WorkerMessage
-from ..parse_state import WorkerState
-from ..parser_config import ParserConfig
+from ..states import WorkerState
 
 
-class SubtreeWorkerActor(Actor[WorkerState, WorkerMessage, WorkerMessage]):
+class SubtreeBuilderWorkerActor(Actor[WorkerState, WorkerMessage, WorkerMessage]):
     def __init__(
             self,
             config: ParserConfig,
@@ -30,3 +30,6 @@ class SubtreeWorkerActor(Actor[WorkerState, WorkerMessage, WorkerMessage]):
             node=node,
         ))
         return WorkerState.IDLE
+
+
+SubtreeWorkerActor = SubtreeBuilderWorkerActor

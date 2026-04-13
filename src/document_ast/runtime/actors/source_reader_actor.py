@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from actor import Actor, ActorHandle
 
+from ...config.parser_config import ParserConfig
+from ...source.source_reader_registry import SourceReaderRegistry
 from ..messages import DocumentLoaded, ReadDocumentRequest, ReaderMessage
-from ..parse_state import WorkerState
-from ..parser_config import ParserConfig
-from ..source_reader_registry import SourceReaderRegistry
+from ..states import WorkerState
 
 
-class DocumentReaderActor(Actor[WorkerState, ReaderMessage, ReaderMessage]):
+class SourceReaderActor(Actor[WorkerState, ReaderMessage, ReaderMessage]):
     def __init__(
             self,
             config: ParserConfig,
@@ -37,3 +37,6 @@ class DocumentReaderActor(Actor[WorkerState, ReaderMessage, ReaderMessage]):
         )
         self._reply_to.tell(DocumentLoaded(document))
         return WorkerState.IDLE
+
+
+DocumentReaderActor = SourceReaderActor

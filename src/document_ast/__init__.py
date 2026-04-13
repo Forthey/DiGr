@@ -1,8 +1,6 @@
-from .actor_ast_parser import ActorAstParser
-from .ast_document import AstDocument
-from .ast_node import AstNode
-from .config_loader import ConfigLoader
-from .parser_config import ParserConfig
+from .api import ActorAstParser
+from .config import ConfigLoader, ParserConfig
+from .model import AstDocument, AstNode
 
 __all__ = [
     "ActorAstParser",

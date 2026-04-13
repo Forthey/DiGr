@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .source_document import SourceDocument
+from ..model.source_document import SourceDocument
 from .source_reader import SourceReader
 
 

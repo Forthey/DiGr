@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
-from .ast_document import AstDocument
-from .ast_node import AstNode
-from .source_document import SourceDocument
-from .text_segment import TextSegment
+from ..model.ast_document import AstDocument
+from ..model.ast_node import AstNode
+from ..model.source_document import SourceDocument
+from ..segmentation.text_segment import TextSegment
 
 
 @dataclass(slots=True)

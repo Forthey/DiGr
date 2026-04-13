@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from .source_document import SourceDocument
+from ..model.source_document import SourceDocument
 
 
 class SourceReader(ABC):

@@ -4,15 +4,15 @@ from dataclasses import dataclass
 
 from actor import ManualActorDriver, ProceedableActorDriver
 
-from .actors import DocumentReaderActor, ParserCoordinatorActor, ResultCollectorActor, SubtreeWorkerActor
-from .parser_config import ParserConfig
+from ..config.parser_config import ParserConfig
+from .actors import ParseCoordinatorActor, ParseResultCollectorActor, SourceReaderActor, SubtreeBuilderWorkerActor
 
 
 @dataclass(slots=True)
 class ParserRuntime:
     driver: ProceedableActorDriver
-    coordinator: ParserCoordinatorActor
-    collector: ResultCollectorActor
+    coordinator: ParseCoordinatorActor
+    collector: ParseResultCollectorActor
 
 
 class ParserRuntimeFactory:
@@ -27,19 +27,19 @@ class ParserRuntimeFactory:
     def create(self, config: ParserConfig) -> ParserRuntime:
         driver = self._driver_factory(step_limit=1)
 
-        collector = ResultCollectorActor()
+        collector = ParseResultCollectorActor()
         collector.bind(driver)
 
-        reader = DocumentReaderActor(config)
+        reader = SourceReaderActor(config)
         reader.bind(driver)
 
         workers = []
         for _ in range(self._worker_count):
-            worker = SubtreeWorkerActor(config)
+            worker = SubtreeBuilderWorkerActor(config)
             worker.bind(driver)
             workers.append(worker)
 
-        coordinator = ParserCoordinatorActor(
+        coordinator = ParseCoordinatorActor(
             config=config,
             reader=reader.as_handle(),
             workers=[w.as_handle() for w in workers],
