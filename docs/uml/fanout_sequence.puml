@@ -11,12 +11,12 @@ participant ActorAstParser
 participant ConfigLoader
 participant ParserRuntimeFactory
 participant Driver
-participant Coordinator as "Coordinator\n(ParserCoordinatorActor)"
-participant Reader as "Reader\n(DocumentReaderActor)"
+participant Coordinator as "Coordinator\n(ParseCoordinatorActor)"
+participant Reader as "Reader\n(SourceReaderActor)"
 participant "Worker[0]" as W0
 participant "Worker[1]" as W1
 participant "Worker[2]" as W2
-participant Collector as "Collector\n(ResultCollectorActor)"
+participant Collector as "Collector\n(ParseResultCollectorActor)"
 
 Client -> ActorAstParser: parse(path, format_name?)
 

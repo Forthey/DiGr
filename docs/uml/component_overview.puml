@@ -3,13 +3,7 @@ skinparam shadowing false
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 
-title DiGr - Компонентная диаграмма (текущее состояние + DSL roadmap)
-
-package "DSL Engine (будущее)" as dsl #DDDDDD {
-  [Query Parser] as qp
-  [Query Executor] as qe
-  [Result Aggregator] as ra
-}
+title DiGr - Компонентная диаграмма (текущее состояние)
 
 package "Document AST" as ast {
   [ActorAstParser\n(публичный API)] as api
@@ -26,6 +20,14 @@ package "Actor Runtime" as actor {
   [Mailbox / ActorHandle] as mh
 }
 
+package "DSL" as dsl {
+  [ActorDslParser] as dsl_parser
+  [ActorDslExecutor] as dsl_executor
+  [ActorDslEngine] as dsl_engine
+  [Execution Runtime\n(Coordinator + Workers)] as dsl_runtime
+  [DocumentIndex + PredicateEvaluator] as dsl_eval
+}
+
 database "config/formats/*.yaml" as config
 
 api --> cl : загружает конфигурацию
@@ -40,16 +42,15 @@ builder --> seg : сегментирует текст
 core --> mh : сообщения через mailbox
 core --> drivers : scheduling
 
-qp ..> pipeline : переиспользует акторы
-qe ..> api : обходит AstDocument
-qe ..> core : matcher-акторы
-ra ..> qe : собирает результаты
+dsl_parser --> core : использует actor runtime
+dsl_parser --> dsl_runtime : parsing pipeline
 
-note bottom of dsl
-  Пунктиром показаны
-  будущие зависимости
-  DSL-слоя от текущей
-  инфраструктуры.
-end note
+dsl_executor --> api : использует AstDocument
+dsl_executor --> core : использует actor runtime
+dsl_executor --> dsl_runtime : execution pipeline
+dsl_executor --> dsl_eval : семантика DSL
+
+dsl_engine --> dsl_parser : parse(query)
+dsl_engine --> dsl_executor : execute(query_ast)
 
 @enduml

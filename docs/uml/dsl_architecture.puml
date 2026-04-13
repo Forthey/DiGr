@@ -1,0 +1,229 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+title DiGr - Class diagram DSL
+
+package "external.document_ast" {
+  class AstDocument
+  class AstNode
+}
+
+package "dsl.api" {
+  class ActorDslParser {
+    +parse(source)
+  }
+
+  class ActorDslExecutor {
+    +execute(document, query)
+  }
+
+  class ActorDslEngine {
+    +execute(document, query_source)
+  }
+}
+
+package "dsl.model" {
+  class RegexLiteral
+  class FieldRef
+  class CountConstraint
+  class SpanSpec
+  class WithinConstraint
+  class Selector
+  class Pattern
+  class ComparisonExpression
+  class FunctionExpression
+  class NotExpression
+  class BinaryExpression
+  class ContextQuery
+  class FindQuery
+
+  SpanSpec *-- CountConstraint
+  WithinConstraint *-- CountConstraint
+  Pattern --> Selector
+  Pattern --> RegexLiteral
+  Selector --> ComparisonExpression
+  Selector --> FunctionExpression
+  Selector --> NotExpression
+  Selector --> BinaryExpression
+  ComparisonExpression --> FieldRef
+  FunctionExpression --> Selector
+  FunctionExpression --> FieldRef
+  FunctionExpression --> SpanSpec
+  NotExpression --> ComparisonExpression
+  NotExpression --> FunctionExpression
+  NotExpression --> BinaryExpression
+  BinaryExpression --> ComparisonExpression
+  BinaryExpression --> FunctionExpression
+  BinaryExpression --> NotExpression
+  BinaryExpression --> BinaryExpression
+  ContextQuery *-- SpanSpec
+  ContextQuery *-- "0..*" Pattern
+  ContextQuery *-- "0..*" WithinConstraint
+  ContextQuery --> ComparisonExpression
+  ContextQuery --> FunctionExpression
+  ContextQuery --> NotExpression
+  ContextQuery --> BinaryExpression
+  FindQuery *-- "0..*" WithinConstraint
+  FindQuery --> ComparisonExpression
+  FindQuery --> FunctionExpression
+  FindQuery --> NotExpression
+  FindQuery --> BinaryExpression
+}
+
+note bottom of ContextQuery
+  DslQuery = ContextQuery | FindQuery
+end note
+
+package "dsl.parsing" {
+  class DslLexer {
+    +tokenize(source)
+  }
+
+  class DslToken
+  class DslTokenStreamParser {
+    +parse_query()
+  }
+
+  class DslParserRuntime {
+    +driver
+    +coordinator
+    +collector
+  }
+
+  class DslParserRuntimeFactory {
+    +create()
+  }
+
+  class DslSyntaxError
+
+  DslLexer --> "0..*" DslToken : создаёт
+  DslTokenStreamParser --> "0..*" DslToken
+  DslTokenStreamParser --> ContextQuery : создаёт
+  DslTokenStreamParser --> FindQuery : создаёт
+}
+
+package "dsl.actors.parsing" {
+  class DslLexerActor {
+    +set_reply_to(handle)
+  }
+
+  class DslQueryParserActor {
+    +set_reply_to(handle)
+  }
+
+  class DslParserCoordinatorActor
+  class DslParseResultCollectorActor {
+    +result
+    +error
+  }
+
+  DslLexerActor --> DslLexer
+  DslQueryParserActor --> DslTokenStreamParser
+}
+
+package "dsl.execution" {
+  class DocumentIndex {
+    +nodes_of_entity(entity_name)
+    +children(node)
+    +descendants(node)
+    +ancestors(node)
+    +previous_node(start, entity_name)
+    +next_node(end, entity_name)
+  }
+
+  class PredicateEvaluator {
+    +evaluate(node, expression)
+    +match_patterns_in_window(query, text, start, end)
+    +count_distinct_containers(nodes, entity_name)
+  }
+
+  class QueryValidator {
+    +validate(query, index)
+  }
+
+  class PatternMatchResult
+  class FindMatch
+  class ContextWindowMatch
+  class FindQueryExecutionResult
+  class ContextQueryExecutionResult
+
+  class DslExecutionRuntime {
+    +driver
+    +coordinator
+    +collector
+  }
+
+  class DslExecutionRuntimeFactory {
+    +create(document)
+  }
+
+  DocumentIndex --> AstDocument
+  DocumentIndex --> AstNode
+  PredicateEvaluator --> DocumentIndex
+  QueryValidator --> DocumentIndex
+  FindMatch --> AstNode
+  ContextWindowMatch --> AstNode
+  ContextWindowMatch --> PatternMatchResult
+  FindQueryExecutionResult --> FindQuery
+  FindQueryExecutionResult --> FindMatch
+  ContextQueryExecutionResult --> ContextQuery
+  ContextQueryExecutionResult --> ContextWindowMatch
+}
+
+package "dsl.actors.execution" {
+  class DslExecutionCoordinatorActor
+  class DslExecutionWorkerActor {
+    +set_reply_to(handle)
+  }
+
+  class DslExecutionResultCollectorActor {
+    +result
+    +error
+  }
+
+  DslExecutionCoordinatorActor --> DocumentIndex
+  DslExecutionCoordinatorActor --> QueryValidator
+  DslExecutionWorkerActor --> PredicateEvaluator
+  DslExecutionWorkerActor --> AstNode
+  DslExecutionResultCollectorActor --> FindQueryExecutionResult
+  DslExecutionResultCollectorActor --> ContextQueryExecutionResult
+}
+
+ActorDslParser --> DslParserRuntimeFactory
+ActorDslParser --> ContextQuery
+ActorDslParser --> FindQuery
+
+ActorDslExecutor --> DslExecutionRuntimeFactory
+ActorDslExecutor --> AstDocument
+ActorDslExecutor --> ContextQuery
+ActorDslExecutor --> FindQuery
+ActorDslExecutor --> FindQueryExecutionResult
+ActorDslExecutor --> ContextQueryExecutionResult
+
+ActorDslEngine --> ActorDslParser
+ActorDslEngine --> ActorDslExecutor
+ActorDslEngine --> AstDocument
+
+DslParserRuntimeFactory --> DslParserRuntime : создаёт
+DslParserRuntimeFactory --> DslLexerActor : создаёт
+DslParserRuntimeFactory --> DslQueryParserActor : создаёт
+DslParserRuntimeFactory --> DslParserCoordinatorActor : создаёт
+DslParserRuntimeFactory --> DslParseResultCollectorActor : создаёт
+DslParserRuntime *-- DslParserCoordinatorActor : coordinator
+DslParserRuntime *-- DslParseResultCollectorActor : collector
+
+DslExecutionRuntimeFactory --> DslExecutionRuntime : создаёт
+DslExecutionRuntimeFactory --> DocumentIndex : создаёт
+DslExecutionRuntimeFactory --> PredicateEvaluator : создаёт
+DslExecutionRuntimeFactory --> DslExecutionCoordinatorActor : создаёт
+DslExecutionRuntimeFactory --> DslExecutionWorkerActor : создаёт xN
+DslExecutionRuntimeFactory --> DslExecutionResultCollectorActor : создаёт
+DslExecutionRuntime *-- DslExecutionCoordinatorActor : coordinator
+DslExecutionRuntime *-- DslExecutionResultCollectorActor : collector
+
+@enduml

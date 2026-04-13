@@ -10,7 +10,7 @@
 - строит AST по правилам этого формата
 - собирает верхний уровень через координатор и достраивает поддеревья через worker-акторов
 
-Результат возвращается как [AstDocument](/home/forthey/projects/DiGr/src/document_ast/ast_document.py).
+Результат возвращается как [AstDocument](/home/forthey/projects/DiGr/src/document_ast/model/ast_document.py).
 
 ## CLI
 
@@ -74,7 +74,7 @@ document = parser.parse("text.txt", format_name="txt")
 - `root_entity`
 - `root`
 
-`root` это [AstNode](/home/forthey/projects/DiGr/src/document_ast/ast_node.py) с полями:
+`root` это [AstNode](/home/forthey/projects/DiGr/src/document_ast/model/ast_node.py) с полями:
 
 - `entity`
 - `text`
@@ -120,8 +120,8 @@ payload = document.to_dict()
 
 Если формат требует специального чтения:
 
-1. создай реализацию [SourceReader](/home/forthey/projects/DiGr/src/document_ast/source_reader.py)
-2. зарегистрируй её в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source_reader_registry.py)
+1. создай реализацию [SourceReader](/home/forthey/projects/DiGr/src/document_ast/source/source_reader.py)
+2. зарегистрируй её в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source/source_reader_registry.py)
 3. создай `config/formats/<format>.yaml`
 4. укажи новый `reader.kind`
 
@@ -129,10 +129,10 @@ payload = document.to_dict()
 
 Внутри `ActorAstParser` создаётся runtime из:
 
-- `ParserCoordinatorActor`
-- `DocumentReaderActor`
-- нескольких `SubtreeWorkerActor`
-- `ResultCollectorActor`
+- `ParseCoordinatorActor`
+- `SourceReaderActor`
+- нескольких `SubtreeBuilderWorkerActor`
+- `ParseResultCollectorActor`
 
 По умолчанию factory создаёт `4` worker'а и использует [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py), но внутренний runtime типизирован через [ProceedableActorDriver](/home/forthey/projects/DiGr/src/actor/arch/proceedable_actor_driver.py).
 
@@ -147,7 +147,7 @@ payload = document.to_dict()
 Если нужен прямой контроль над конфигурацией runtime, можно создавать фабрику напрямую:
 
 ```python
-from document_ast.config_loader import ConfigLoader
+from document_ast.config import ConfigLoader
 from document_ast.runtime import ParserRuntimeFactory
 
 

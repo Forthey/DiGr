@@ -73,7 +73,7 @@ entities:
 
 ### `format.reader`
 
-Настройка reader, который превращает исходный файл в [SourceDocument](/home/forthey/projects/DiGr/src/document_ast/source_document.py).
+Настройка reader, который превращает исходный файл в [SourceDocument](/home/forthey/projects/DiGr/src/document_ast/model/source_document.py).
 
 Обязательное поле:
 
@@ -156,7 +156,7 @@ word:
 - `split`
 - `match`
 
-В коде это реализовано через стратегический реестр в [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py):
+В коде это реализовано через стратегический реестр в [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/segmentation/text_segmenter.py):
 
 - `PassthroughStrategy`
 - `SplitStrategy`
@@ -253,13 +253,13 @@ flags:
   - DOTALL
 ```
 
-Сейчас [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py) всегда включает `re.MULTILINE`, а затем добавляет перечисленные во `flags` значения через `resolve_flags(...)`.
+Сейчас [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/segmentation/text_segmenter.py) всегда включает `re.MULTILINE`, а затем добавляет перечисленные во `flags` значения через `resolve_flags(...)`.
 
 Если передать неподдержанное имя, будет выброшена ошибка конфигурации.
 
 ## Что валидирует `ConfigLoader`
 
-[ConfigLoader](/home/forthey/projects/DiGr/src/document_ast/config_loader.py) проверяет:
+[ConfigLoader](/home/forthey/projects/DiGr/src/document_ast/config/config_loader.py) проверяет:
 
 - что корень YAML это mapping
 - что есть раздел `format`
@@ -314,7 +314,7 @@ page:
 
 Это важный архитектурный момент: сущность `page` здесь не захардкожена в коде. Она существует только потому, что так описано в конфиге.
 
-Именно по этой причине `ParserCoordinatorActor` сначала сегментирует документ на `page`, а уже потом раздаёт каждый сегмент worker'ам для рекурсивной сборки поддеревьев.
+Именно по этой причине `ParseCoordinatorActor` сначала сегментирует документ на `page`, а уже потом раздаёт каждый сегмент worker'ам для рекурсивной сборки поддеревьев.
 
 ### Сущность `paragraph`
 
@@ -421,7 +421,7 @@ word:
 Если нужен собственный reader:
 
 1. создай новый `SourceReader`
-2. зарегистрируй его в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source_reader_registry.py)
+2. зарегистрируй его в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source/source_reader_registry.py)
 3. укажи новый `reader.kind` в `<format>.yaml`
 
 ## Связанные материалы

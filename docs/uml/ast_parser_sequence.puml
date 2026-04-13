@@ -11,12 +11,12 @@ participant ActorAstParser
 participant ConfigLoader
 participant ParserRuntimeFactory
 participant ManualActorDriver as Driver
-participant ParserCoordinatorActor as Coordinator
-participant DocumentReaderActor as Reader
+participant ParseCoordinatorActor as Coordinator
+participant SourceReaderActor as Reader
 participant SourceReaderRegistry
-participant "SubtreeWorkerActor[i]" as Worker
+participant "SubtreeBuilderWorkerActor[i]" as Worker
 participant AstBuilder
-participant ResultCollectorActor as Collector
+participant ParseResultCollectorActor as Collector
 
 Client -> ActorAstParser: parse(path, format_name?)
 activate ActorAstParser

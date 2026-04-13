@@ -1,215 +1,266 @@
 # Архитектура AST-парсера
 
-## Назначение
+## Назначение подсистемы
 
-Подсистема `src/document_ast` строит AST документа поверх actor-архитектуры из `src/actor`.
+Подсистема `src/document_ast` строит `AstDocument` поверх actor runtime из `src/actor`.
 
-Её задача разделена на две независимые части:
+Её задача:
 
-- конфигурация формата описывает, какие сущности есть в документе и как они выделяются из текста
-- actor-пайплайн исполняет разбор как последовательность сообщений между специализированными акторами
+- прочитать исходный документ;
+- выбрать конфигурацию формата;
+- сегментировать текст на структурные сущности;
+- собрать дерево `AstNode`;
+- вернуть единый `AstDocument`.
 
-Текущая реализация делает это в два уровня:
+Подсистема не знает заранее про конкретные сущности вроде `sentence` или `paragraph`. Эти сущности задаются конфигурацией формата.
 
-- координатор сначала выделяет сегменты верхнего уровня для `root_entity`
-- затем эти сегменты fan-out'ом раздаются worker-акторам, которые строят поддеревья независимо друг от друга
+Класс-диаграмма подсистемы находится в [ast_parser_architecture.puml](./uml/ast_parser_architecture.puml).
 
-Из этого следует важный принцип: код парсера не знает заранее про `word`, `sentence`, `paragraph`, `page` или любые другие сущности. Он знает только про:
+## Текущая структура пакета
 
-- формат
-- корневую сущность
-- иерархию `contains`
-- правила сегментации, заданные в YAML
+После рефакторинга `document_ast` разбит на смысловые слои:
 
-## Основные слои
+- `api`
+- `model`
+- `config`
+- `source`
+- `segmentation`
+- `runtime`
 
-### 1. Публичный API
+Это делает архитектуру читаемой прямо по дереву файлов.
 
-Точка входа в подсистему это [ActorAstParser](/home/forthey/projects/DiGr/src/document_ast/actor_ast_parser.py).
+## Публичный API
 
-Он отвечает за:
+Публичная точка входа:
 
-- определение формата по расширению файла, если формат не передан явно
-- загрузку `config/formats/<format>.yaml`
-- создание runtime с акторами
-- запуск разбора и возврат готового `AstDocument`
+- [ActorAstParser](/home/forthey/projects/DiGr/src/document_ast/api/document_parser.py)
 
-### 2. Конфигурация формата
+Этот класс отвечает за:
 
-Конфигурация описывается следующими объектами:
+- определение формата по расширению файла;
+- загрузку `config/formats/<format>.yaml`;
+- создание actor runtime;
+- запуск пайплайна разбора;
+- возврат `AstDocument`.
 
-- [ConfigLoader](/home/forthey/projects/DiGr/src/document_ast/config_loader.py)
-- [ParserConfig](/home/forthey/projects/DiGr/src/document_ast/parser_config.py)
-- [FormatConfig](/home/forthey/projects/DiGr/src/document_ast/format_config.py)
-- [EntityConfig](/home/forthey/projects/DiGr/src/document_ast/entity_config.py)
+## Слой модели
 
-Эта часть отвечает за:
+Модель данных лежит в `src/document_ast/model`:
 
-- загрузку YAML
-- проверку структуры конфига
-- проверку существования `root_entity`
-- проверку ссылок `contains`
-- проверку отсутствия циклов в иерархии сущностей
+- [AstDocument](/home/forthey/projects/DiGr/src/document_ast/model/ast_document.py)
+- [AstNode](/home/forthey/projects/DiGr/src/document_ast/model/ast_node.py)
+- [SourceDocument](/home/forthey/projects/DiGr/src/document_ast/model/source_document.py)
 
-Именно здесь формируется формальная модель разбора документа.
+Роли:
 
-### 3. Чтение исходного документа
+- `SourceDocument` представляет уже прочитанный источник;
+- `AstNode` представляет узел дерева с диапазоном `start/end`;
+- `AstDocument` представляет итоговое дерево вместе с метаданными документа.
 
-Подсистема чтения источника состоит из:
+## Слой конфигурации
 
-- [SourceReader](/home/forthey/projects/DiGr/src/document_ast/source_reader.py): абстрактный интерфейс чтения
-- [PlainTextReader](/home/forthey/projects/DiGr/src/document_ast/plain_text_reader.py): текущая реализация для plain text
-- [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source_reader_registry.py): выбор reader по `reader.kind`
-- [SourceDocument](/home/forthey/projects/DiGr/src/document_ast/source_document.py): нормализованное представление исходного документа
+Конфигурация живёт в `src/document_ast/config`:
 
-Важная идея здесь такая: AST-построитель работает не с `txt` напрямую, а с `SourceDocument`. Поэтому для поддержки `json`, `xml`, `docx` или другого формата нужно:
+- [ConfigLoader](/home/forthey/projects/DiGr/src/document_ast/config/config_loader.py)
+- [ParserConfig](/home/forthey/projects/DiGr/src/document_ast/config/parser_config.py)
+- [FormatConfig](/home/forthey/projects/DiGr/src/document_ast/config/format_config.py)
+- [EntityConfig](/home/forthey/projects/DiGr/src/document_ast/config/entity_config.py)
 
-1. добавить новый `SourceReader`
-2. зарегистрировать его в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source_reader_registry.py)
-3. описать формат в отдельном `<format>.yaml`
+Этот слой отвечает за:
 
-### 4. Сегментация и построение AST
+- загрузку YAML;
+- проверку структуры конфига;
+- проверку существования `root_entity`;
+- проверку ссылок `contains`;
+- проверку отсутствия циклов.
 
-Слой сегментации и построения включает:
+Именно здесь формируется формальная модель документа.
 
-- [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/text_segmenter.py)
-- [TextSegment](/home/forthey/projects/DiGr/src/document_ast/text_segment.py)
-- [AstBuilder](/home/forthey/projects/DiGr/src/document_ast/ast_builder.py)
-- [AstNode](/home/forthey/projects/DiGr/src/document_ast/ast_node.py)
-- [AstDocument](/home/forthey/projects/DiGr/src/document_ast/ast_document.py)
+## Слой чтения источника
 
-Распределение ответственности следующее:
+Чтение исходного документа живёт в `src/document_ast/source`:
 
-- `TextSegmenter` работает как реестр стратегий сегментации
-- `PassthroughStrategy`, `SplitStrategy`, `MatchStrategy` реализуют конкретные виды сегментации
-- `AstBuilder` рекурсивно проходит по иерархии `root_entity -> contains -> contains -> ...`
-- `AstNode` хранит узел дерева вместе с диапазоном `start/end`
-- `AstDocument` хранит корень AST и метаданные результата
+- [SourceReader](/home/forthey/projects/DiGr/src/document_ast/source/source_reader.py)
+- [PlainTextReader](/home/forthey/projects/DiGr/src/document_ast/source/plain_text_reader.py)
+- [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source/source_reader_registry.py)
 
-`TextSegmenter` больше не зашит как один набор `if/elif`, а позволяет регистрировать новые стратегии через `register(kind, strategy)`.
+Ключевая идея:
 
-`AstBuilder` не содержит хардкода предметных сущностей. Он просто берёт очередную сущность из `ParserConfig`, сегментирует текст по её правилам и, если указано `contains`, рекурсивно строит дочерние узлы. В текущем runtime worker'ы используют для этого метод `build_entity_node(...)`, то есть строят не целый документ, а отдельные поддеревья.
+- AST-парсер не читает `txt`, `xml` или `json` напрямую;
+- он работает с абстракцией `SourceDocument`;
+- конкретный способ чтения выбирается через `reader.kind`.
 
-### 5. Actor-runtime
+Сейчас реально поддержан `plain_text`, но архитектура уже готова к новым reader-ам.
 
-Исполнение построено через один координатор, один reader, набор worker-акторов и collector:
+## Слой сегментации
 
-- [ParserCoordinatorActor](/home/forthey/projects/DiGr/src/document_ast/actors/parser_coordinator_actor.py)
-- [DocumentReaderActor](/home/forthey/projects/DiGr/src/document_ast/actors/document_reader_actor.py)
-- [SubtreeWorkerActor](/home/forthey/projects/DiGr/src/document_ast/actors/subtree_worker_actor.py)
-- [ResultCollectorActor](/home/forthey/projects/DiGr/src/document_ast/actors/result_collector_actor.py)
+Сегментация живёт в `src/document_ast/segmentation`:
 
-Runtime создаётся в [ParserRuntimeFactory](/home/forthey/projects/DiGr/src/document_ast/runtime.py). Фабрика параметризуется:
+- [TextSegment](/home/forthey/projects/DiGr/src/document_ast/segmentation/text_segment.py)
+- [TextSegmenter](/home/forthey/projects/DiGr/src/document_ast/segmentation/text_segmenter.py)
 
-- `worker_count`: число subtree-worker'ов, по умолчанию `4`
-- `driver_factory`: класс драйвера, по умолчанию [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py)
+`TextSegmenter` работает как реестр стратегий сегментации.
 
-В сам `ParserRuntime` наружу отдаются:
+Поддержанные виды:
 
-- `driver`
-- `coordinator`
-- `collector`
+- `passthrough`
+- `split`
+- `match`
 
-Reader и worker'ы остаются внутренними деталями runtime factory.
+Это позволяет описывать структуру формата декларативно через YAML.
 
-Роли акторов:
+## Runtime-слой
 
-- `ParserCoordinatorActor` управляет жизненным циклом разбора
-- `DocumentReaderActor` читает исходный документ через registry
-- `SubtreeWorkerActor` строит поддерево для одного сегмента верхнего уровня
-- `ResultCollectorActor` сохраняет итоговый результат
+Runtime живёт в `src/document_ast/runtime`.
 
-Состояния также разделены:
+Основные элементы:
 
-- `CoordinatorState`: `IDLE`, `WAITING_FOR_DOCUMENT`, `BUILDING_SUBTREES`, `COMPLETED`
-- `WorkerState`: `IDLE`
+- [AstBuilder](/home/forthey/projects/DiGr/src/document_ast/runtime/ast_builder.py)
+- [messages.py](/home/forthey/projects/DiGr/src/document_ast/runtime/messages.py)
+- [states.py](/home/forthey/projects/DiGr/src/document_ast/runtime/states.py)
+- [pipeline_runtime.py](/home/forthey/projects/DiGr/src/document_ast/runtime/pipeline_runtime.py)
+- `runtime/actors/*`
 
-## Жизненный цикл разбора
+### `AstBuilder`
 
-Полный разбор одного документа выглядит так:
+`AstBuilder` рекурсивно строит поддеревья по `ParserConfig`.
 
-1. `ActorAstParser.parse()` получает путь и определяет `format_name`
-2. Загружается `config/formats/<format>.yaml`
-3. `ParserRuntimeFactory` создаёт driver и акторы
-4. В `ParserCoordinatorActor` отправляется `ParseDocumentRequest`
-5. Вызывается `runtime.driver.drain()`, то есть запускается `ProceedableActorDriver`
-6. `ParserCoordinatorActor` отправляет `ReadDocumentRequest` в `DocumentReaderActor`
-7. `DocumentReaderActor` читает источник и возвращает `DocumentLoaded`
-8. `ParserCoordinatorActor` сегментирует текст верхнего уровня по `root_entity`
-9. Для каждого сегмента координатор отправляет `BuildSubtreeRequest` одному из `SubtreeWorkerActor`
-10. Worker строит поддерево через `AstBuilder.build_entity_node(...)`
-11. Worker отправляет `SubtreeCompleted`
-12. Координатор собирает все результаты в правильном порядке и формирует `AstDocument`
-13. Координатор отправляет `ParseCompleted` в `ResultCollectorActor`
-14. `ActorAstParser` забирает `collector.result` и возвращает `AstDocument`
+Он не знает доменные сущности заранее. Он работает только с:
 
-Это означает, что actor-модель здесь используется не как украшение, а как явный execution model для стадий разбора.
+- `root_entity`;
+- `contains`;
+- правилами сегментации.
 
-Важно: fan-out/fan-in здесь логический. При `ManualActorDriver` выполнение всё равно идёт детерминированно по шагам. При другой реализации `ProceedableActorDriver` та же схема может исполняться иначе.
+### Runtime messages
 
-## Как AST-парсер использует actor-архитектуру
+В `messages.py` лежит протокол обмена сообщениями:
 
-AST-подсистема опирается только на несколько базовых сущностей actor-слоя:
+- `ParseDocumentRequest`
+- `ReadDocumentRequest`
+- `DocumentLoaded`
+- `BuildSubtreeRequest`
+- `SubtreeCompleted`
+- `ParseCompleted`
 
-- [Actor](/home/forthey/projects/DiGr/src/actor/arch/actor.py): базовый класс всех AST-акторов
-- [ActorHandle](/home/forthey/projects/DiGr/src/actor/handles/actor_handle.py): передача сообщений между акторами без прямой зависимости на объект актора
-- [ProceedableActorDriver](/home/forthey/projects/DiGr/src/actor/arch/proceedable_actor_driver.py): минимальный контракт драйвера для AST-runtime
-- [ManualActorDriver](/home/forthey/projects/DiGr/src/actor/drivers/manual_actor_driver.py): реализация по умолчанию
+### Runtime states
 
-Это даёт два полезных свойства:
+В `states.py` определены состояния:
 
-- прикладная логика разбора отделена от механики планирования и mailbox
-- runtime уже сейчас типизирован против `ProceedableActorDriver`, а не против конкретного `ManualActorDriver`
+- `CoordinatorState`
+- `WorkerState`
 
-## Расширяемость
+Координатор использует фазовые состояния:
 
-### Добавление нового формата без нового reader
+- `IDLE`
+- `WAITING_FOR_DOCUMENT`
+- `BUILDING_SUBTREES`
+- `COMPLETED`
 
-Если новый формат уже может быть представлен как plain text, достаточно:
+## Actor pipeline AST-парсера
 
-1. создать `config/formats/<format>.yaml`
-2. указать `reader.kind: plain_text`
-3. описать сущности и сегментацию
+В `src/document_ast/runtime/actors` находятся:
 
-### Добавление нового формата с новым reader
+- [SourceReaderActor](/home/forthey/projects/DiGr/src/document_ast/runtime/actors/source_reader_actor.py)
+- [ParseCoordinatorActor](/home/forthey/projects/DiGr/src/document_ast/runtime/actors/parse_coordinator_actor.py)
+- [SubtreeBuilderWorkerActor](/home/forthey/projects/DiGr/src/document_ast/runtime/actors/subtree_builder_worker_actor.py)
+- [ParseResultCollectorActor](/home/forthey/projects/DiGr/src/document_ast/runtime/actors/parse_result_collector_actor.py)
 
-Если формат требует отдельного извлечения текста или структуры:
+Для совместимости сохранены старые алиасы:
 
-1. реализовать новый класс, наследующий [SourceReader](/home/forthey/projects/DiGr/src/document_ast/source_reader.py)
-2. зарегистрировать его в [SourceReaderRegistry](/home/forthey/projects/DiGr/src/document_ast/source_reader_registry.py)
-3. создать `config/formats/<format>.yaml`
-4. указать нужный `reader.kind`
+- `DocumentReaderActor`
+- `ParserCoordinatorActor`
+- `SubtreeWorkerActor`
+- `ResultCollectorActor`
 
-### Добавление новой иерархии сущностей
+Но основными именами теперь являются именно более выразительные:
 
-Для этого не нужно менять `AstBuilder`. Достаточно:
+- `SourceReaderActor`
+- `ParseCoordinatorActor`
+- `SubtreeBuilderWorkerActor`
+- `ParseResultCollectorActor`
 
-1. описать новую цепочку `root_entity -> contains`
-2. для каждой сущности задать `segmenter`
+## Роли акторов
 
-## Формальная UML-модель
+### `SourceReaderActor`
 
-Для AST-подсистемы подготовлены две UML-диаграммы:
+Читает документ через `SourceReaderRegistry` и отдаёт `DocumentLoaded`.
 
-- [ast_parser_architecture.puml](/home/forthey/projects/DiGr/docs/uml/ast_parser_architecture.puml): class diagram структуры подсистемы
-- [ast_parser_sequence.puml](/home/forthey/projects/DiGr/docs/uml/ast_parser_sequence.puml): sequence diagram процесса разбора
+### `ParseCoordinatorActor`
 
-Дополнительно есть более узкие диаграммы текущей логики runtime:
+Управляет жизненным циклом разбора:
 
-- [component_overview.puml](/home/forthey/projects/DiGr/docs/uml/component_overview.puml): компонентный обзор проекта
-- [coordinator_state_machine.puml](/home/forthey/projects/DiGr/docs/uml/coordinator_state_machine.puml): state machine координатора
-- [fanout_sequence.puml](/home/forthey/projects/DiGr/docs/uml/fanout_sequence.puml): fan-out/fan-in сценарий по worker-акторам
+- принимает `ParseDocumentRequest`;
+- запускает чтение документа;
+- сегментирует верхний уровень;
+- раздаёт задачи worker-ам;
+- собирает поддеревья;
+- формирует итоговый `AstDocument`.
 
-При построении диаграмм соблюдены следующие правила моделирования:
+### `SubtreeBuilderWorkerActor`
 
-- имена классов и enum совпадают с кодом
-- внешние зависимости на actor-подсистему выделены в отдельный пакет
-- композиция используется только там, где владение зафиксировано в коде
-- generic-параметры не кодируются в имени класса, чтобы не ломать рендеринг PlantUML и не смешивать идентификатор типа с шаблонной спецификацией
-- последовательность сообщений показана отдельно sequence diagram, а не смешана с class diagram
+Строит поддерево для одного сегмента верхнего уровня через `AstBuilder.build_entity_node(...)`.
+
+### `ParseResultCollectorActor`
+
+Сохраняет финальный результат.
+
+## Runtime factory
+
+Runtime создаётся в [ParserRuntimeFactory](/home/forthey/projects/DiGr/src/document_ast/runtime/pipeline_runtime.py).
+
+Фабрика:
+
+- создаёт driver;
+- создаёт coordinator;
+- создаёт reader;
+- создаёт пул worker-ов;
+- создаёт collector;
+- связывает их между собой через handle-ы.
+
+Наружу выдаётся `ParserRuntime`, содержащий:
+
+- `driver`;
+- `coordinator`;
+- `collector`.
+
+Reader и worker-ы остаются внутренними деталями runtime.
+
+## Как проходит разбор документа
+
+Полный жизненный цикл:
+
+1. `ActorAstParser.parse(...)` получает путь и формат;
+2. грузится YAML-конфиг формата;
+3. `ParserRuntimeFactory` создаёт runtime;
+4. координатор получает `ParseDocumentRequest`;
+5. `SourceReaderActor` читает документ;
+6. координатор получает `DocumentLoaded`;
+7. координатор выделяет сегменты верхнего уровня по `root_entity`;
+8. для каждого сегмента отправляется `BuildSubtreeRequest`;
+9. `SubtreeBuilderWorkerActor` строят поддеревья;
+10. координатор получает `SubtreeCompleted`;
+11. координатор собирает итоговое дерево;
+12. collector получает `ParseCompleted`.
+
+Это fan-out / fan-in pipeline:
+
+- fan-out: coordinator -> workers;
+- fan-in: workers -> coordinator.
+
+## Почему эта архитектура полезна
+
+Она даёт:
+
+- отсутствие хардкода структур документа;
+- разделение конфигурации и исполнения;
+- возможность масштабировать worker-ов;
+- естественное место для интеграции с DSL.
+
+Главный результат этой подсистемы — не просто распарсенный текст, а дерево, по которому можно выполнять структурные запросы.
 
 ## Связанные материалы
 
-- [Архитектура акторов](./actor_architecture.md)
 - [Конфигурация AST-парсера](./ast_parser_configuration.md)
 - [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md)
+- [Архитектура DSL](./dsl_architecture.md)
+- [Файловая структура проекта](./project_structure.md)

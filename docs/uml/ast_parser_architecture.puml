@@ -6,33 +6,76 @@ skinparam classAttributeIconSize 0
 skinparam shadowing false
 hide empty members
 
+title DiGr - Class diagram AST-парсера
+
+package "external.actor" {
+  abstract class Actor
+  class ActorHandle
+  interface ProceedableActorDriver
+}
+
+package "document_ast.api" {
+  class ActorAstParser {
+    +from_config_dir(config_dir)
+    +parse(path, format_name)
+  }
+}
+
 package "document_ast.config" {
   class ConfigLoader {
     +load(path, expected_format_name)
   }
 
   class ParserConfig {
-    +format_config: FormatConfig
-    +entities: dict
     +format_name
+    +format_config
+    +entities
     +get_entity(entity_name)
   }
 
   class FormatConfig {
-    +name: str
-    +reader: dict
-    +root_entity: str
+    +name
+    +reader
+    +root_entity
   }
 
   class EntityConfig {
-    +name: str
-    +contains: str
-    +segmenter: dict
+    +name
+    +contains
+    +segmenter
   }
 
-  ParserConfig *-- "1" FormatConfig
-  ParserConfig *-- "1..*" EntityConfig
   ConfigLoader --> ParserConfig : создаёт
+  ParserConfig *-- FormatConfig
+  ParserConfig *-- "1..*" EntityConfig
+}
+
+package "document_ast.model" {
+  class SourceDocument {
+    +path
+    +format_name
+    +text
+  }
+
+  class AstNode {
+    +entity
+    +text
+    +start
+    +end
+    +children
+    +metadata
+  }
+
+  class AstDocument {
+    +source_path
+    +format_name
+    +root_entity
+    +root
+    +to_dict()
+  }
+
+  AstDocument *-- "1" AstNode : root
+  AstNode *-- "0..*" AstNode : children
 }
 
 package "document_ast.source" {
@@ -45,14 +88,7 @@ package "document_ast.source" {
   }
 
   class SourceReaderRegistry {
-    -_readers: dict
     +read(path, format_name, reader_config)
-  }
-
-  class SourceDocument {
-    +path: str
-    +format_name: str
-    +text: str
   }
 
   SourceReader <|-- PlainTextReader
@@ -61,138 +97,88 @@ package "document_ast.source" {
 }
 
 package "document_ast.segmentation" {
-  abstract class SegmentStrategy {
-    +segment(text, base_start, config)
+  class TextSegment {
+    +text
+    +start
+    +end
   }
-
-  class PassthroughStrategy
-  class SplitStrategy
-  class MatchStrategy
 
   class TextSegmenter {
-    -_strategies: dict
-    +register(kind, strategy)
     +segment(text, base_start, config)
   }
 
-  class TextSegment {
-    +text: str
-    +start: int
-    +end: int
-  }
-
-  SegmentStrategy <|-- PassthroughStrategy
-  SegmentStrategy <|-- SplitStrategy
-  SegmentStrategy <|-- MatchStrategy
-  TextSegmenter o-- "1..*" SegmentStrategy
   TextSegmenter --> "0..*" TextSegment : создаёт
 }
 
-package "document_ast.model" {
-  class AstBuilder {
-    -_config: ParserConfig
-    -_segmenter: TextSegmenter
-    +build(document)
-    +build_entity_node(entity_name, segment)
-  }
-
-  class AstDocument {
-    +source_path: str
-    +format_name: str
-    +root_entity: str
-    +root: AstNode
-    +to_dict()
-  }
-
-  class AstNode {
-    +entity: str
-    +text: str
-    +start: int
-    +end: int
-    +children: list
-    +metadata: dict
-    +to_dict()
-  }
-
-  AstBuilder --> ParserConfig
-  AstBuilder --> TextSegmenter
-  AstBuilder --> SourceDocument
-  AstBuilder --> AstDocument : создаёт
-  AstDocument *-- "1" AstNode : root
-  AstNode *-- "0..*" AstNode : children
-}
-
 package "document_ast.runtime" {
-  enum CoordinatorState {
-    IDLE
-    WAITING_FOR_DOCUMENT
-    BUILDING_SUBTREES
-    COMPLETED
-  }
-
-  enum WorkerState {
-    IDLE
+  class AstBuilder {
+    +build_entity_node(entity_name, segment)
   }
 
   class ParserRuntime {
     +driver
-    +coordinator: ParserCoordinatorActor
-    +collector: ResultCollectorActor
+    +coordinator
+    +collector
   }
 
   class ParserRuntimeFactory {
-    -_worker_count: int
-    -_driver_factory
     +create(config)
   }
 
-  class ParserCoordinatorActor {
-    -_config: ParserConfig
-    -_reader
-    -_workers: list
-    -_collector
-    -_pending_count: int
-    -_subtree_results: dict
-    -_document: SourceDocument
-    -_segmenter: TextSegmenter
-  }
-
-  class DocumentReaderActor {
-    -_config: ParserConfig
-    -_reply_to
-    -_registry: SourceReaderRegistry
+  class ParseCoordinatorActor
+  class SourceReaderActor {
     +set_reply_to(handle)
   }
 
-  class SubtreeWorkerActor {
-    -_builder: AstBuilder
-    -_reply_to
+  class SubtreeBuilderWorkerActor {
     +set_reply_to(handle)
   }
 
-  class ResultCollectorActor {
-    +result: AstDocument
+  class ParseResultCollectorActor {
+    +result
   }
 
   ParserRuntimeFactory --> ParserRuntime : создаёт
-  ParserRuntimeFactory --> ParserConfig
-  ParserRuntimeFactory --> ParserCoordinatorActor : создаёт
-  ParserRuntimeFactory --> DocumentReaderActor : создаёт
-  ParserRuntimeFactory --> SubtreeWorkerActor : создаёт ×N
-  ParserRuntimeFactory --> ResultCollectorActor : создаёт
+  ParserRuntimeFactory --> ParseCoordinatorActor : создаёт
+  ParserRuntimeFactory --> SourceReaderActor : создаёт
+  ParserRuntimeFactory --> SubtreeBuilderWorkerActor : создаёт xN
+  ParserRuntimeFactory --> ParseResultCollectorActor : создаёт
 
-  ParserRuntime *-- "1" ParserCoordinatorActor
-  ParserRuntime *-- "1" ResultCollectorActor
+  ParserRuntime *-- ProceedableActorDriver : driver
+  ParserRuntime *-- ParseCoordinatorActor : coordinator
+  ParserRuntime *-- ParseResultCollectorActor : collector
 
-  ParserCoordinatorActor --> ParserConfig
-  ParserCoordinatorActor --> TextSegmenter
-  ParserCoordinatorActor --> SourceDocument
-  ParserCoordinatorActor --> AstDocument
-  DocumentReaderActor --> ParserConfig
-  DocumentReaderActor --> SourceReaderRegistry
-  DocumentReaderActor --> SourceDocument
-  SubtreeWorkerActor --> AstBuilder
-  SubtreeWorkerActor --> AstNode
-  ResultCollectorActor --> AstDocument
+  AstBuilder --> ParserConfig
+  AstBuilder --> TextSegmenter
+  AstBuilder --> TextSegment
+  AstBuilder --> AstNode : создаёт
+
+  ParseCoordinatorActor --|> Actor
+  SourceReaderActor --|> Actor
+  SubtreeBuilderWorkerActor --|> Actor
+  ParseResultCollectorActor --|> Actor
+
+  ParseCoordinatorActor --> ParserConfig
+  ParseCoordinatorActor --> TextSegmenter
+  ParseCoordinatorActor --> SourceDocument
+  ParseCoordinatorActor --> AstDocument
+  ParseCoordinatorActor --> ActorHandle : reader / workers / collector
+
+  SourceReaderActor --> ParserConfig
+  SourceReaderActor --> SourceReaderRegistry
+  SourceReaderActor --> SourceDocument
+  SourceReaderActor --> ActorHandle : reply_to
+
+  SubtreeBuilderWorkerActor --> AstBuilder
+  SubtreeBuilderWorkerActor --> AstNode
+  SubtreeBuilderWorkerActor --> ActorHandle : reply_to
+
+  ParseResultCollectorActor --> AstDocument
 }
+
+ActorAstParser --> ConfigLoader
+ActorAstParser --> ParserRuntimeFactory
+ActorAstParser --> ParserConfig
+ActorAstParser --> AstDocument
+
 @enduml

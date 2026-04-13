@@ -1,31 +1,54 @@
-# Документация
-
-## Акторная архитектура
-
-- [Архитектура акторов](./actor_architecture.md): устройство базовой actor-подсистемы, контракты, драйверы и модель исполнения
-- [Быстрый старт по акторам](./actor_quickstart.md): минимальные примеры `Actor`, `ActorHandle` и разных драйверов
-
-## AST-парсер
-
-- [Архитектура AST-парсера](./ast_parser_architecture.md): устройство подсистемы `document_ast`, роли классов и жизненный цикл разбора
-- [Конфигурация AST-парсера](./ast_parser_configuration.md): полная схема `<format>.yaml`, правила валидации и подробный разбор `txt.yaml`
-- [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md): запуск через CLI и Python API, а также расширение на новые форматы
-
-## DSL
-
-- [EBNF-грамматика DSL](./dsl_grammar.ebnf): формальная грамматика запросов `CONTEXT` и `FIND` поверх AST
-- [Описание DSL](./dsl_language.md): семантика языка, операторов и контекстных окон с примерами
-
-## UML
-
-- [Полная UML-диаграмма actor-архитектуры](./uml/actor_architecture.puml)
-- [Компактная UML-диаграмма actor-архитектуры](./uml/actor_architecture_min.puml)
-- [UML class diagram AST-парсера](./uml/ast_parser_architecture.puml)
-- [UML sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
-- [Компонентная диаграмма проекта](./uml/component_overview.puml)
-- [Диаграмма состояний координатора AST-парсера](./uml/coordinator_state_machine.puml)
-- [Fan-out / Fan-in sequence diagram AST-парсера](./uml/fanout_sequence.puml)
+# Документация DiGr
 
 ## Как читать документацию
 
-Если нужно понять основу actor-модели, сначала стоит прочитать [Архитектуру акторов](./actor_architecture.md). Если задача связана именно с разбором документов в AST, лучше начать с [Архитектуры AST-парсера](./ast_parser_architecture.md), а затем перейти к [Конфигурации AST-парсера](./ast_parser_configuration.md), потому что структура разбора определяется именно YAML-конфигом формата.
+Если нужно быстро войти в проект, оптимальный порядок такой:
+
+1. [Файловая структура проекта](./project_structure.md)
+2. [Архитектура акторов](./actor_architecture.md)
+3. [Архитектура AST-парсера](./ast_parser_architecture.md)
+4. [Конфигурация AST-парсера](./ast_parser_configuration.md)
+5. [Архитектура DSL](./dsl_architecture.md)
+6. [Описание DSL](./dsl_language.md)
+7. [Быстрый старт по DSL](./dsl_quickstart.md)
+
+Такой порядок соответствует реальной зависимости подсистем:
+
+- сначала базовый actor runtime;
+- затем построение `AstDocument`;
+- затем выполнение запросов DSL по уже построенному дереву.
+
+## Акторная подсистема
+
+- [Архитектура акторов](./actor_architecture.md)
+- [Быстрый старт по акторам](./actor_quickstart.md)
+
+## AST-парсер
+
+- [Архитектура AST-парсера](./ast_parser_architecture.md)
+- [Конфигурация AST-парсера](./ast_parser_configuration.md)
+- [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md)
+
+## DSL
+
+- [Архитектура DSL](./dsl_architecture.md)
+- [Описание DSL](./dsl_language.md)
+- [EBNF-грамматика DSL](./dsl_grammar.ebnf)
+- [Быстрый старт по DSL](./dsl_quickstart.md)
+
+## Навигация по репозиторию
+
+- [Файловая структура проекта](./project_structure.md)
+
+## UML-диаграммы
+
+- [Class diagram actor runtime](./uml/actor_architecture.puml)
+- [Class diagram AST-парсера](./uml/ast_parser_architecture.puml)
+- [Sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
+- [Fan-out / Fan-in sequence diagram AST-парсера](./uml/fanout_sequence.puml)
+- [Class diagram DSL](./uml/dsl_architecture.puml)
+- [Компонентная диаграмма проекта](./uml/component_overview.puml)
+
+## Презентационный материал
+
+- [Подробный рассказ о текущем состоянии проекта](../present.md)
