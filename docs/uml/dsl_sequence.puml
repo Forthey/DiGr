@@ -1,0 +1,123 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title Sequence: Парсинг и выполнение DSL-запроса
+
+actor Client
+participant ActorDslEngine as Engine
+participant ActorDslParser as ParserApi
+participant DslParserRuntimeFactory as ParserFactory
+participant ManualActorDriver as ParserDriver
+participant DslParserCoordinatorActor as ParserCoordinator
+participant DslLexerActor as LexerActor
+participant DslQueryParserActor as QueryParserActor
+participant DslParseResultCollectorActor as ParseCollector
+participant ActorDslExecutor as ExecutorApi
+participant DslExecutionRuntimeFactory as ExecFactory
+participant DocumentIndex
+participant PredicateEvaluator
+participant ManualActorDriver as ExecDriver
+participant DslExecutionCoordinatorActor as ExecCoordinator
+participant "DslExecutionWorkerActor[i]" as ExecWorker
+participant DslExecutionResultCollectorActor as ExecCollector
+
+Client -> Engine: execute(document, query_source)
+activate Engine
+
+Engine -> ParserApi: parse(query_source)
+activate ParserApi
+ParserApi -> ParserFactory: create()
+activate ParserFactory
+ParserFactory -> ParserDriver: create step_limit=1
+ParserFactory -> LexerActor: bind(driver)
+ParserFactory -> QueryParserActor: bind(driver)
+ParserFactory -> ParseCollector: bind(driver)
+ParserFactory -> ParserCoordinator: bind(driver)
+ParserFactory --> ParserApi: DslParserRuntime
+deactivate ParserFactory
+
+ParserApi -> ParserCoordinator: put(ParseDslRequest)
+ParserApi -> ParserDriver: drain()
+activate ParserDriver
+
+loop while parser actors are runnable
+  ParserDriver -> ParserCoordinator: step(1)
+  activate ParserCoordinator
+  ParserCoordinator -> LexerActor: tell(TokenizeDslRequest)
+  deactivate ParserCoordinator
+
+  ParserDriver -> LexerActor: step(1)
+  activate LexerActor
+  LexerActor -> ParserCoordinator: tell(DslTokenized)
+  deactivate LexerActor
+
+  ParserDriver -> ParserCoordinator: step(1)
+  activate ParserCoordinator
+  ParserCoordinator -> QueryParserActor: tell(ParseTokenStreamRequest)
+  deactivate ParserCoordinator
+
+  ParserDriver -> QueryParserActor: step(1)
+  activate QueryParserActor
+  QueryParserActor -> ParseCollector: tell(DslQueryParsed)
+  deactivate QueryParserActor
+
+  ParserDriver -> ParseCollector: step(1)
+  activate ParseCollector
+  ParseCollector --> ParseCollector: result = query_ast
+  deactivate ParseCollector
+end
+
+deactivate ParserDriver
+ParserApi --> Engine: DslQuery
+deactivate ParserApi
+
+Engine -> ExecutorApi: execute(document, query_ast)
+activate ExecutorApi
+ExecutorApi -> ExecFactory: create(document)
+activate ExecFactory
+ExecFactory -> DocumentIndex: create(document)
+ExecFactory -> PredicateEvaluator: create(index)
+ExecFactory -> ExecDriver: create step_limit=1
+ExecFactory -> ExecWorker: bind(driver) x N
+ExecFactory -> ExecCollector: bind(driver)
+ExecFactory -> ExecCoordinator: bind(driver)
+ExecFactory --> ExecutorApi: DslExecutionRuntime
+deactivate ExecFactory
+
+ExecutorApi -> ExecCoordinator: put(ExecuteDslQueryRequest)
+ExecutorApi -> ExecDriver: drain()
+activate ExecDriver
+
+loop while execution actors are runnable
+  ExecDriver -> ExecCoordinator: step(1)
+  activate ExecCoordinator
+  ExecCoordinator -> ExecWorker: tell(EvaluateFindCandidateRequest / EvaluateContextWindowRequest)
+  deactivate ExecCoordinator
+
+  ExecDriver -> ExecWorker: step(1)
+  activate ExecWorker
+  ExecWorker -> ExecCoordinator: tell(FindCandidateEvaluated / ContextWindowEvaluated)
+  deactivate ExecWorker
+
+  ExecDriver -> ExecCoordinator: step(1)
+  activate ExecCoordinator
+  ExecCoordinator -> ExecCollector: tell(DslQueryExecuted)
+  deactivate ExecCoordinator
+
+  ExecDriver -> ExecCollector: step(1)
+  activate ExecCollector
+  ExecCollector --> ExecCollector: result = execution_result
+  deactivate ExecCollector
+end
+
+deactivate ExecDriver
+ExecutorApi --> Engine: DslExecutionResult
+deactivate ExecutorApi
+
+Engine --> Client: DslExecutionResult
+deactivate Engine
+
+@enduml

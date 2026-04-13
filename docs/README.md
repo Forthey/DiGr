@@ -47,6 +47,7 @@
 - [Sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
 - [Fan-out / Fan-in sequence diagram AST-парсера](./uml/fanout_sequence.puml)
 - [Class diagram DSL](./uml/dsl_architecture.puml)
+- [Sequence diagram DSL](./uml/dsl_sequence.puml)
 - [Компонентная диаграмма проекта](./uml/component_overview.puml)
 
 ## Презентационный материал

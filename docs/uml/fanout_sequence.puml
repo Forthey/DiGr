@@ -73,12 +73,6 @@ activate W1
 Driver -> W2: step(1)
 activate W2
 
-note over W0, W2
-  Каждый worker строит полное поддерево
-  (paragraph → sentence → clause → word)
-  независимо от остальных.
-end note
-
 W1 --> Coordinator: tell(SubtreeCompleted(1, node1))
 deactivate W1
 W0 --> Coordinator: tell(SubtreeCompleted(0, node0))

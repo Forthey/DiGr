@@ -42,11 +42,11 @@ ParserRuntimeFactory -> Worker: set_reply_to(coordinator.handle) × N
 ParserRuntimeFactory --> ActorAstParser: ParserRuntime
 deactivate ParserRuntimeFactory
 
-ActorAstParser -> Coordinator: put(ParseDocumentRequest)
-note right
-  put() кладёт сообщение в mailbox
-  и планирует актор в driver.
-end note
+  ActorAstParser -> Coordinator: put(ParseDocumentRequest)
+  note right
+    put() кладёт сообщение в mailbox
+    и планирует актор в driver.
+  end note
 
 ActorAstParser -> Driver: drain()
 activate Driver
@@ -84,11 +84,6 @@ loop while runnable actors exist
   deactivate AstBuilder
   Worker -> Coordinator: tell(SubtreeCompleted)
   deactivate Worker
-
-  note over Driver, Worker
-    Повторяется для каждого worker'а.
-    При ThreadedActorDriver — параллельно.
-  end note
 
   Driver -> Coordinator: step(1)
   activate Coordinator
