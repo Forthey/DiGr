@@ -42,12 +42,12 @@ activate Driver
 
 Driver -> Coordinator: step(1)
 activate Coordinator
-Coordinator -> Reader: tell(ReadDocumentRequest)
+Coordinator -> Reader: put(ReadDocumentRequest)
 deactivate Coordinator
 
 Driver -> Reader: step(1)
 activate Reader
-Reader --> Coordinator: tell(DocumentLoaded)
+Reader --> Coordinator: put(DocumentLoaded)
 deactivate Reader
 
 == Этап 2: Fan-out — сегментация и раздача ==
@@ -59,9 +59,9 @@ note right of Coordinator
   (page → 3 сегмента-абзаца).
   Раздаёт round-robin по worker'ам.
 end note
-Coordinator -> W0: tell(BuildSubtreeRequest(0, seg0))
-Coordinator -> W1: tell(BuildSubtreeRequest(1, seg1))
-Coordinator -> W2: tell(BuildSubtreeRequest(2, seg2))
+Coordinator -> W0: put(BuildSubtreeRequest(0, seg0))
+Coordinator -> W1: put(BuildSubtreeRequest(1, seg1))
+Coordinator -> W2: put(BuildSubtreeRequest(2, seg2))
 deactivate Coordinator
 
 == Этап 3: Параллельная сборка поддеревьев ==
@@ -73,11 +73,11 @@ activate W1
 Driver -> W2: step(1)
 activate W2
 
-W1 --> Coordinator: tell(SubtreeCompleted(1, node1))
+W1 --> Coordinator: put(SubtreeCompleted(1, node1))
 deactivate W1
-W0 --> Coordinator: tell(SubtreeCompleted(0, node0))
+W0 --> Coordinator: put(SubtreeCompleted(0, node0))
 deactivate W0
-W2 --> Coordinator: tell(SubtreeCompleted(2, node2))
+W2 --> Coordinator: put(SubtreeCompleted(2, node2))
 deactivate W2
 
 == Этап 4: Fan-in — сборка результата ==
@@ -88,7 +88,7 @@ note right of Coordinator
   Все 3 поддерева получены.
   Собирает AstDocument.
 end note
-Coordinator -> Collector: tell(ParseCompleted(document))
+Coordinator -> Collector: put(ParseCompleted(document))
 deactivate Coordinator
 
 Driver -> Collector: step(1)

@@ -1,56 +1,71 @@
 @startuml
+left to right direction
 skinparam shadowing false
 skinparam componentStyle rectangle
 skinparam packageStyle rectangle
 
-title DiGr - Компонентная диаграмма (текущее состояние)
-
-package "Document AST" as ast {
-  [ActorAstParser\n(публичный API)] as api
-  [ConfigLoader] as cl
-  [Actor Pipeline\n(Coordinator + Workers)] as pipeline
-  [AstBuilder] as builder
-  [TextSegmenter\n(Strategy Registry)] as seg
-  [SourceReaderRegistry] as srr
-}
+title DiGr - Компонентная диаграмма
 
 package "Actor Runtime" as actor {
-  [Actor / FSM] as core
-  [Drivers\n(Manual, Threaded, Asyncio)] as drivers
-  [Mailbox / ActorHandle] as mh
+  component "Actor Runtime\n(Actor, ActorHandle, Drivers)" as actor_runtime
+}
+
+package "Document AST" as ast {
+  component "Parser API\n(ActorAstParser)" as ast_api
+  component "Format Configuration\n(ConfigLoader, ParserConfig)" as ast_config
+  component "Parsing Runtime\n(ParserRuntimeFactory + actors)" as ast_runtime
+  component "Source Reading\n(SourceReaderRegistry + readers)" as ast_source
+  component "Segmentation\n(TextSegmenter)" as ast_seg
+  component "AST Model\n(SourceDocument, AstNode, AstDocument)" as ast_model
 }
 
 package "DSL" as dsl {
-  [ActorDslParser] as dsl_parser
-  [ActorDslExecutor] as dsl_executor
-  [ActorDslEngine] as dsl_engine
-  [Execution Runtime\n(Coordinator + Workers)] as dsl_runtime
-  [DocumentIndex + PredicateEvaluator] as dsl_eval
+  component "DSL Parser API\n(ActorDslParser)" as dsl_parser_api
+  component "DSL Parser Runtime\n(DslParserRuntimeFactory + actors)" as dsl_parser_runtime
+  component "DSL Executor API\n(ActorDslExecutor)" as dsl_executor_api
+  component "DSL Execution Runtime\n(DslExecutionRuntimeFactory + actors)" as dsl_execution_runtime
+  component "DSL Engine API\n(ActorDslEngine)" as dsl_engine_api
+  component "DSL Query Model\n(query_ast)" as dsl_query_model
+  component "Execution Semantics\n(DocumentIndex, PredicateEvaluator,\nQueryValidator, QueryResults)" as dsl_execution_semantics
 }
 
-database "config/formats/*.yaml" as config
+database "config/formats/*.yaml" as format_configs
 
-api --> cl : загружает конфигурацию
-api --> pipeline : создаёт runtime
-cl --> config : читает YAML
+ast_api ..> ast_config : uses
+ast_api ..> ast_runtime : uses
+ast_api ..> ast_model : exposes
 
-pipeline --> core : использует акторный рантайм
-pipeline --> builder : worker'ы строят поддеревья
-pipeline --> srr : reader читает файл
-builder --> seg : сегментирует текст
+ast_config ..> format_configs : loads
 
-core --> mh : сообщения через mailbox
-core --> drivers : scheduling
+ast_runtime ..> actor_runtime : uses
+ast_runtime ..> ast_source : uses
+ast_runtime ..> ast_seg : uses
+ast_runtime ..> ast_model : builds
 
-dsl_parser --> core : использует actor runtime
-dsl_parser --> dsl_runtime : parsing pipeline
+ast_source ..> ast_model : creates
 
-dsl_executor --> api : использует AstDocument
-dsl_executor --> core : использует actor runtime
-dsl_executor --> dsl_runtime : execution pipeline
-dsl_executor --> dsl_eval : семантика DSL
+dsl_parser_api ..> dsl_parser_runtime : uses
+dsl_parser_api ..> dsl_query_model : exposes
 
-dsl_engine --> dsl_parser : parse(query)
-dsl_engine --> dsl_executor : execute(query_ast)
+dsl_parser_runtime ..> actor_runtime : uses
+dsl_parser_runtime ..> dsl_query_model : builds
+
+dsl_executor_api ..> dsl_execution_runtime : uses
+dsl_executor_api ..> ast_model : consumes
+dsl_executor_api ..> dsl_query_model : consumes
+
+dsl_execution_runtime ..> actor_runtime : uses
+dsl_execution_runtime ..> ast_model : traverses
+dsl_execution_runtime ..> dsl_query_model : evaluates
+dsl_execution_runtime ..> dsl_execution_semantics : uses
+
+dsl_engine_api ..> dsl_parser_api : uses
+dsl_engine_api ..> dsl_executor_api : uses
+dsl_engine_api ..> ast_model : consumes
+
+note bottom
+  Диаграмма показывает только устойчивые зависимости между компонентами.
+  Динамический обмен сообщениями между акторами вынесен в sequence diagrams.
+end note
 
 @enduml

@@ -8,12 +8,6 @@ hide empty members
 
 title DiGr - Class diagram AST-парсера
 
-package "external.actor" {
-  abstract class Actor
-  class ActorHandle
-  interface ProceedableActorDriver
-}
-
 package "document_ast.api" {
   class ActorAstParser {
     +from_config_dir(config_dir)
@@ -144,7 +138,6 @@ package "document_ast.runtime" {
   ParserRuntimeFactory --> SubtreeBuilderWorkerActor : создаёт xN
   ParserRuntimeFactory --> ParseResultCollectorActor : создаёт
 
-  ParserRuntime *-- ProceedableActorDriver : driver
   ParserRuntime *-- ParseCoordinatorActor : coordinator
   ParserRuntime *-- ParseResultCollectorActor : collector
 
@@ -153,25 +146,17 @@ package "document_ast.runtime" {
   AstBuilder --> TextSegment
   AstBuilder --> AstNode : создаёт
 
-  ParseCoordinatorActor --|> Actor
-  SourceReaderActor --|> Actor
-  SubtreeBuilderWorkerActor --|> Actor
-  ParseResultCollectorActor --|> Actor
-
   ParseCoordinatorActor --> ParserConfig
   ParseCoordinatorActor --> TextSegmenter
   ParseCoordinatorActor --> SourceDocument
   ParseCoordinatorActor --> AstDocument
-  ParseCoordinatorActor --> ActorHandle : reader / workers / collector
 
   SourceReaderActor --> ParserConfig
   SourceReaderActor --> SourceReaderRegistry
   SourceReaderActor --> SourceDocument
-  SourceReaderActor --> ActorHandle : reply_to
 
   SubtreeBuilderWorkerActor --> AstBuilder
   SubtreeBuilderWorkerActor --> AstNode
-  SubtreeBuilderWorkerActor --> ActorHandle : reply_to
 
   ParseResultCollectorActor --> AstDocument
 }

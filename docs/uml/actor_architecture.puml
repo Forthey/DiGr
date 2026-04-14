@@ -19,7 +19,7 @@ package "actor.handles" {
     -_output: Output
     +output: Output
     +put(message)
-    +tell(message)
+    +put(message)
   }
 
   ActorHandle ..|> Output

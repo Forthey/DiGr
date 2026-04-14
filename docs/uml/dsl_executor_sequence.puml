@@ -1,0 +1,65 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title Выполнение DSL запроса
+
+participant ActorDslEngine as Engine
+participant ActorDslExecutor as ExecutorApi
+participant DslExecutionRuntimeFactory as ExecFactory
+participant DocumentIndex
+participant PredicateEvaluator
+participant ManualActorDriver as ExecDriver
+participant DslExecutionCoordinatorActor as ExecCoordinator
+participant "DslExecutionWorkerActor[i]" as ExecWorker
+participant DslExecutionResultCollectorActor as ExecCollector
+
+Engine -> ExecutorApi: execute(document, query_ast)
+activate Engine
+activate ExecutorApi
+
+ExecutorApi -> ExecFactory: create(document)
+activate ExecFactory
+ExecFactory -> DocumentIndex: create(document)
+ExecFactory -> PredicateEvaluator: create(index)
+ExecFactory -> ExecDriver: create step_limit=1
+ExecFactory -> ExecWorker: bind(driver) x N
+ExecFactory -> ExecCollector: bind(driver)
+ExecFactory -> ExecCoordinator: bind(driver)
+ExecFactory --> ExecutorApi: DslExecutionRuntime
+deactivate ExecFactory
+
+ExecutorApi -> ExecCoordinator: put(ExecuteDslQueryRequest)
+ExecutorApi -> ExecDriver: drain()
+activate ExecDriver
+
+loop while execution actors are runnable
+  ExecDriver -> ExecCoordinator: step(1)
+  activate ExecCoordinator
+  ExecCoordinator -> ExecWorker: put(EvaluateFindCandidateRequest / EvaluateContextWindowRequest)
+  deactivate ExecCoordinator
+
+  ExecDriver -> ExecWorker: step(1)
+  activate ExecWorker
+  ExecWorker -> ExecCoordinator: put(FindCandidateEvaluated / ContextWindowEvaluated)
+  deactivate ExecWorker
+
+  ExecDriver -> ExecCoordinator: step(1)
+  activate ExecCoordinator
+  ExecCoordinator -> ExecCollector: put(DslQueryExecuted)
+  deactivate ExecCoordinator
+
+  ExecDriver -> ExecCollector: step(1)
+  activate ExecCollector
+  ExecCollector --> ExecCollector: result = execution_result
+  deactivate ExecCollector
+end
+
+deactivate ExecDriver
+ExecutorApi --> Engine: DslExecutionResult
+deactivate ExecutorApi
+deactivate Engine
+
+@enduml

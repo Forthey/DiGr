@@ -55,7 +55,7 @@ loop while runnable actors exist
 
   Driver -> Coordinator: step(1)
   activate Coordinator
-  Coordinator -> Reader: tell(ReadDocumentRequest)
+  Coordinator -> Reader: put(ReadDocumentRequest)
   deactivate Coordinator
 
   Driver -> Reader: step(1)
@@ -64,7 +64,7 @@ loop while runnable actors exist
   activate SourceReaderRegistry
   SourceReaderRegistry --> Reader: SourceDocument
   deactivate SourceReaderRegistry
-  Reader -> Coordinator: tell(DocumentLoaded)
+  Reader -> Coordinator: put(DocumentLoaded)
   deactivate Reader
 
   Driver -> Coordinator: step(1)
@@ -73,7 +73,7 @@ loop while runnable actors exist
     Сегментация верхнего уровня.
     Fan-out: N сегментов → N worker'ам.
   end note
-  Coordinator -> Worker: tell(BuildSubtreeRequest) × N
+  Coordinator -> Worker: put(BuildSubtreeRequest) × N
   deactivate Coordinator
 
   Driver -> Worker: step(1)
@@ -82,7 +82,7 @@ loop while runnable actors exist
   activate AstBuilder
   AstBuilder --> Worker: AstNode
   deactivate AstBuilder
-  Worker -> Coordinator: tell(SubtreeCompleted)
+  Worker -> Coordinator: put(SubtreeCompleted)
   deactivate Worker
 
   Driver -> Coordinator: step(1)
@@ -91,7 +91,7 @@ loop while runnable actors exist
     Fan-in: все поддеревья получены.
     Собирает AstDocument.
   end note
-  Coordinator -> Collector: tell(ParseCompleted)
+  Coordinator -> Collector: put(ParseCompleted)
   deactivate Coordinator
 
   Driver -> Collector: step(1)
