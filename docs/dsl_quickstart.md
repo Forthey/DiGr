@@ -140,6 +140,31 @@ RETURN text, matches
 - окно должно лежать в одном `paragraph`;
 - вернуть текст окна и найденные совпадения.
 
+### 4. Найти определения в `GA_1_2025.tex`
+
+```dsl
+FIND semantic_block
+WHERE metadata.kind = "definition"
+RETURN text, count
+```
+
+### 5. Найти все теоремы
+
+```dsl
+FIND semantic_block
+WHERE metadata.kind = "theorem"
+RETURN text, count
+```
+
+### 6. Найти доказательства в нужном разделе
+
+```dsl
+FIND semantic_block
+WHERE metadata.kind = "proof"
+  AND has_ancestor(section[text ~= /Языки и грамматики/])
+RETURN text, count
+```
+
 ## Важная практическая оговорка
 
 Запросы нужно писать в соответствии с реальной структурой AST.

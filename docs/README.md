@@ -28,6 +28,7 @@
 - [Архитектура AST-парсера](./ast_parser_architecture.md)
 - [Конфигурация AST-парсера](./ast_parser_configuration.md)
 - [Быстрый старт по AST-парсеру](./ast_parser_quickstart.md)
+- [Быстрый старт по формату tex](./tex_format_quickstart.md)
 
 ## DSL
 

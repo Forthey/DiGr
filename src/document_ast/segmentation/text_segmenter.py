@@ -82,6 +82,129 @@ class MatchStrategy(SegmentStrategy):
         ]
 
 
+class LatexContentScopeStrategy(SegmentStrategy):
+    _frame_pattern = re.compile(r"\\begin\{frame\}.*?\\end\{frame\}", flags=re.MULTILINE | re.DOTALL)
+
+    def segment(
+            self,
+            text: str,
+            base_start: int,
+            segmenter_config: dict[str, Any],
+    ) -> list[TextSegment]:
+        segments: list[TextSegment] = []
+        cursor = 0
+
+        for match in self._frame_pattern.finditer(text):
+            if match.start() > cursor:
+                segments.append(
+                    TextSegment(
+                        text=text[cursor:match.start()],
+                        start=base_start + cursor,
+                        end=base_start + match.start(),
+                        metadata={"kind": "free"},
+                    )
+                )
+
+            segments.append(
+                TextSegment(
+                    text=match.group(0),
+                    start=base_start + match.start(),
+                    end=base_start + match.end(),
+                    metadata={"kind": "frame"},
+                )
+            )
+            cursor = match.end()
+
+        if cursor < len(text):
+            segments.append(
+                TextSegment(
+                    text=text[cursor:],
+                    start=base_start + cursor,
+                    end=base_start + len(text),
+                    metadata={"kind": "free"},
+                )
+            )
+
+        return segments
+
+
+class LatexSemanticBlockStrategy(SegmentStrategy):
+    _frame_bounds_pattern = re.compile(
+        r"^\s*\\begin\{frame\}(?P<body>.*)\\end\{frame\}\s*$",
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    _token_pattern = re.compile(
+        r"""
+        \\frametitle\{.*?\}
+        |
+        \\subsubsection\{.*?\}(?:\\label\{.*?\})?
+        |
+        \\begin\{(?P<env>definition|theorem|lemma|proof|example|remark|digress|itemize|enumerate)\}
+        .*?
+        \\end\{(?P=env)\}
+        """,
+        flags=re.MULTILINE | re.DOTALL | re.VERBOSE,
+    )
+
+    def segment(
+            self,
+            text: str,
+            base_start: int,
+            segmenter_config: dict[str, Any],
+    ) -> list[TextSegment]:
+        body_match = self._frame_bounds_pattern.match(text)
+        if body_match is None:
+            body_text = text
+            body_start = base_start
+        else:
+            body_text = body_match.group("body")
+            body_start = base_start + body_match.start("body")
+
+        segments: list[TextSegment] = []
+        cursor = 0
+
+        for match in self._token_pattern.finditer(body_text):
+            if match.start() > cursor:
+                segments.append(self._plain_segment(body_text, body_start, cursor, match.start()))
+
+            kind = self._resolve_kind(match)
+            segments.append(
+                TextSegment(
+                    text=match.group(0),
+                    start=body_start + match.start(),
+                    end=body_start + match.end(),
+                    metadata={"kind": kind},
+                )
+            )
+            cursor = match.end()
+
+        if cursor < len(body_text):
+            segments.append(self._plain_segment(body_text, body_start, cursor, len(body_text)))
+
+        return segments
+
+    @staticmethod
+    def _plain_segment(text: str, base_start: int, start: int, end: int) -> TextSegment:
+        return TextSegment(
+            text=text[start:end],
+            start=base_start + start,
+            end=base_start + end,
+            metadata={"kind": "plain"},
+        )
+
+    @staticmethod
+    def _resolve_kind(match: re.Match[str]) -> str:
+        token = match.group(0)
+        env = match.groupdict().get("env")
+        if env is not None:
+            return env
+        if token.startswith("\\frametitle"):
+            return "frametitle"
+        if token.startswith("\\subsubsection"):
+            return "subsubsection"
+        return "plain"
+
+
 def resolve_flags(segmenter_config: dict[str, Any]) -> int:
     flags = re.MULTILINE
     for name in segmenter_config.get("flags", []):
@@ -102,6 +225,7 @@ def _trim_segment(segment: TextSegment) -> TextSegment:
         text=text,
         start=segment.start + stripped_left,
         end=segment.start + stripped_right,
+        metadata=dict(segment.metadata),
     )
 
 
@@ -127,6 +251,8 @@ class TextSegmenter:
             "passthrough": PassthroughStrategy(),
             "split": SplitStrategy(),
             "match": MatchStrategy(),
+            "latex_content_scope": LatexContentScopeStrategy(),
+            "latex_semantic_block": LatexSemanticBlockStrategy(),
         }
 
     def register(self, kind: str, strategy: SegmentStrategy) -> None:

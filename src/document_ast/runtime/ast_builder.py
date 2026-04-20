@@ -57,6 +57,7 @@ class AstBuilder:
             start=segment.start,
             end=segment.end,
             children=children,
+            metadata=dict(segment.metadata),
         )
 
     def _segment_entity(self, entity_name: str, text: str, base_start: int) -> list[TextSegment]:

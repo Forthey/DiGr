@@ -65,6 +65,16 @@ parser = ActorAstParser.from_config_dir("config/formats")
 document = parser.parse("text.txt", format_name="txt")
 ```
 
+Для `GA_1_2025.tex`:
+
+```python
+from document_ast import ActorAstParser
+
+
+parser = ActorAstParser.from_config_dir("config/formats")
+document = parser.parse("GA_1_2025.tex", format_name="tex")
+```
+
 ## Что вернётся в результате
 
 `AstDocument` содержит:
@@ -105,6 +115,23 @@ payload = document.to_dict()
 - весь файл сначала рассматривается как одна `page`
 - далее текст режется на `paragraph` по пустым строкам
 - потом на `sentence`, `clause` и `word` по regex-правилам
+
+## Как сейчас устроен разбор `tex`
+
+Текущий `tex.yaml` ориентирован на `GA_1_2025.tex` и строит такую иерархию:
+
+- `document`
+- `section`
+- `subsection_scope`
+- `content_scope`
+- `semantic_block`
+
+При этом:
+
+- `content_scope.metadata.kind` различает реальные `frame`-блоки и свободный текст между ними;
+- `semantic_block.metadata.kind` различает `theorem`, `proof`, `definition`, `example`, `remark`, `digress`, `frametitle` и другие прикладные блоки.
+
+Это не полноценный TeX-parser, а прикладная AST-модель для DSL-поиска по этому источнику.
 
 ## Как добавить новый формат
 
