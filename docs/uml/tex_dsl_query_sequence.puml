@@ -1,0 +1,59 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title Sequence: DSL-поиск теорем в TeX AST
+
+actor Analyst
+participant ActorDslEngine as Engine
+participant ActorDslParser as Parser
+participant ActorDslExecutor as Executor
+participant DocumentIndex
+participant PredicateEvaluator as Evaluator
+participant "FindQueryExecutionResult" as Result
+
+Analyst -> Engine: execute(document,\n"FIND semantic_block WHERE metadata.kind = \"theorem\" RETURN text, count")
+activate Engine
+
+Engine -> Parser: parse(query_source)
+activate Parser
+Parser --> Engine: FindQuery(entity_name="semantic_block", ...)
+deactivate Parser
+
+Engine -> Executor: execute(document, query)
+activate Executor
+Executor -> DocumentIndex: build(document)
+activate DocumentIndex
+DocumentIndex --> Executor: entity index
+deactivate DocumentIndex
+
+Executor -> DocumentIndex: nodes_of_entity("semantic_block")
+DocumentIndex --> Executor: candidate nodes
+
+loop for each semantic_block
+  Executor -> Evaluator: evaluate(node, metadata.kind = "theorem")
+  activate Evaluator
+  Evaluator --> Executor: true / false
+  deactivate Evaluator
+end
+
+Executor -> Result: build matched items
+activate Result
+Result --> Executor: serialized payload
+deactivate Result
+
+Executor --> Engine: FindQueryExecutionResult
+deactivate Executor
+Engine --> Analyst: { count, items[text] }
+deactivate Engine
+
+note right of Evaluator
+  Поиск идёт не по "чистому TeX",
+  а по прикладным AST-узлам,
+  где metadata.kind уже выделяет
+  theorem / proof / definition / ...
+end note
+
+@enduml

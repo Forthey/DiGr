@@ -1,0 +1,79 @@
+@startuml
+top to bottom direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+hide empty members
+
+title DiGr - Прикладная AST-модель формата tex
+
+class AstDocument {
+  +source_path
+  +format_name = "tex"
+  +root_entity = "section"
+  +root: AstNode
+}
+
+class AstNode {
+  +entity
+  +text
+  +start
+  +end
+  +metadata
+  +children
+}
+
+class section {
+  +entity = "section"
+}
+
+class subsection_scope {
+  +entity = "subsection_scope"
+}
+
+class content_scope {
+  +entity = "content_scope"
+  +metadata.kind = "frame" | "free"
+}
+
+class semantic_block {
+  +entity = "semantic_block"
+  +metadata.kind = "frametitle" | "subsubsection" | "definition"
+  +metadata.kind = "theorem" | "lemma" | "proof"
+  +metadata.kind = "example" | "remark" | "digress"
+  +metadata.kind = "itemize" | "enumerate" | "plain"
+}
+
+AstDocument *-- "1" AstNode : root
+AstNode <|-- section
+AstNode <|-- subsection_scope
+AstNode <|-- content_scope
+AstNode <|-- semantic_block
+
+section *-- "0..*" subsection_scope
+subsection_scope *-- "0..*" content_scope
+content_scope *-- "0..*" semantic_block
+
+note right of content_scope
+  Это прикладной контейнер уровня содержимого.
+  Он отделяет реальные frame-блоки от свободного текста
+  между ними.
+end note
+
+note right of semantic_block
+  Это главный уровень для DSL-поиска.
+
+  Примеры:
+  - theorem
+  - proof
+  - definition
+  - plain
+end note
+
+note bottom
+  Модель не пытается представить весь TeX как синтаксическое дерево.
+  Она строится под поиск значимых блоков в GA_1_2025.tex.
+end note
+
+@enduml

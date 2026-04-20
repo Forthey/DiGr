@@ -1,0 +1,65 @@
+@startuml
+autonumber
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title Sequence: Разбор GA_1_2025.tex в прикладной AST
+
+actor User
+participant "src/main.py\nили Python API" as EntryPoint
+participant ActorAstParser as Parser
+participant ConfigLoader
+participant "Parser Runtime" as Runtime
+participant "SourceReaderRegistry\n+ PlainTextReader" as Reader
+participant "TextSegmenter" as Segmenter
+participant AstDocument
+
+User -> EntryPoint: parse("GA_1_2025.tex", format_name="tex")
+activate EntryPoint
+
+EntryPoint -> Parser: parse(path, "tex")
+activate Parser
+
+Parser -> ConfigLoader: load("config/formats/tex.yaml")
+activate ConfigLoader
+ConfigLoader --> Parser: ParserConfig
+deactivate ConfigLoader
+
+Parser -> Runtime: create(config)
+activate Runtime
+Runtime -> Reader: read(source_path, format_name, reader_config)
+activate Reader
+Reader --> Runtime: SourceDocument(text)
+deactivate Reader
+
+Runtime -> Segmenter: segment(section)
+activate Segmenter
+Segmenter --> Runtime: section segments
+
+Runtime -> Segmenter: segment(subsection_scope)
+Segmenter --> Runtime: subsection_scope segments
+
+Runtime -> Segmenter: segment(content_scope)\nvia latex_content_scope
+Segmenter --> Runtime: content_scope(frame/free)
+
+Runtime -> Segmenter: segment(semantic_block)\nvia latex_semantic_block
+Segmenter --> Runtime: semantic_block(..., metadata.kind)
+deactivate Segmenter
+
+Runtime --> Parser: AstDocument
+deactivate Runtime
+
+Parser --> EntryPoint: AstDocument
+deactivate Parser
+EntryPoint --> User: document ready
+deactivate EntryPoint
+
+note right of Segmenter
+  Ключевой шаг нового сценария:
+  сегментация не только режет текст,
+  но и помечает блоки metadata.kind
+  для дальнейшего DSL-поиска.
+end note
+
+@enduml

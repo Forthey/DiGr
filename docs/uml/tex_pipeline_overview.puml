@@ -1,0 +1,52 @@
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype ortho
+
+title DiGr - Сценарий "GA_1_2025.tex -> AST -> DSL"
+
+artifact "GA_1_2025.tex" as tex_file
+database "config/formats/tex.yaml" as tex_config
+
+package "Document Parsing" {
+  component "ActorAstParser" as ast_parser
+  component "TeX-aware Segmentation\n(latex_content_scope,\nlatex_semantic_block)" as tex_seg
+  component "AstDocument\nroot_entity = section" as ast_document
+}
+
+package "AST Structure" {
+  component "section" as section
+  component "subsection_scope" as subsection
+  component "content_scope\nmetadata.kind = frame | free" as content_scope
+  component "semantic_block\nmetadata.kind = theorem | proof |\ndefinition | example | ..." as semantic_block
+}
+
+package "DSL Querying" {
+  component "ActorDslEngine" as dsl_engine
+  component "DSL query\nFIND semantic_block\nWHERE metadata.kind = \"theorem\"" as dsl_query
+  component "Query result\ntext, count, matches" as dsl_result
+}
+
+tex_file --> ast_parser : parse()
+tex_config --> ast_parser : format config
+ast_parser --> tex_seg : uses custom segmenters
+tex_seg --> ast_document : builds
+
+ast_document --> section : contains
+section --> subsection : contains
+subsection --> content_scope : contains
+content_scope --> semantic_block : contains
+
+ast_document --> dsl_engine : execute(document, query)
+dsl_query --> dsl_engine : query source
+dsl_engine --> dsl_result : structured result
+
+note bottom
+  Презентационный акцент:
+  один и тот же документный pipeline сначала строит прикладной AST,
+  а затем позволяет искать учебно-значимые TeX-блоки DSL-запросами.
+end note
+
+@enduml

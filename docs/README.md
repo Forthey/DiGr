@@ -50,6 +50,10 @@
 - [Class diagram DSL](./uml/dsl_architecture.puml)
 - [Sequence diagram DSL](./uml/dsl_sequence.puml)
 - [Компонентная диаграмма проекта](./uml/component_overview.puml)
+- [Презентационный overview: TeX -> AST -> DSL](./uml/tex_pipeline_overview.puml)
+- [Презентационная AST-модель формата tex](./uml/tex_ast_model.puml)
+- [Презентационный sequence: разбор GA_1_2025.tex](./uml/tex_parsing_sequence.puml)
+- [Презентационный sequence: DSL-поиск по TeX AST](./uml/tex_dsl_query_sequence.puml)
 
 ## Презентационный материал
 
