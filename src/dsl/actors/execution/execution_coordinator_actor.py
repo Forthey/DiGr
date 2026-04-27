@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from actor import Actor, ActorHandle
+from document_ast.model.ast_node import AstNode
 
 from ...execution.document_index import DocumentIndex
+from ...execution.distance_calculator import DistanceCalculator
 from ...execution.messages import (
     ContextWindowEvaluated,
     DslExecutionFailed,
@@ -13,11 +15,18 @@ from ...execution.messages import (
     ExecutionCoordinatorMessage,
     FindCandidateEvaluated,
 )
-from ...execution.query_results import ContextQueryExecutionResult, ContextWindowMatch, FindMatch, \
-    FindQueryExecutionResult
+from ...execution.predicate_evaluator import PredicateEvaluator
+from ...execution.query_results import (
+    ContextQueryExecutionResult,
+    ContextWindowMatch,
+    DistanceQueryExecutionResult,
+    FindMatch,
+    FindQueryExecutionResult,
+    render_compact_node,
+)
 from ...execution.query_validator import QueryValidator
 from ...execution.states import DslExecutionCoordinatorState
-from ...model.query_ast import ContextQuery, FindQuery
+from ...model.query_ast import ContextQuery, DistanceQuery, DistanceReturn, FindQuery
 
 
 class DslExecutionCoordinatorActor(
@@ -28,12 +37,15 @@ class DslExecutionCoordinatorActor(
             index: DocumentIndex,
             workers: list[ActorHandle[object]],
             collector: ActorHandle[object],
+            evaluator: PredicateEvaluator | None = None,
             validator: QueryValidator | None = None,
     ) -> None:
         super().__init__(DslExecutionCoordinatorState, DslExecutionCoordinatorState.IDLE)
         self._index = index
         self._workers = workers
         self._collector = collector
+        self._evaluator = evaluator or PredicateEvaluator(index)
+        self._distance_calculator = DistanceCalculator(index, self._evaluator)
         self._validator = validator or QueryValidator()
         self._pending_count = 0
         self._find_results: dict[int, FindMatch] = {}
@@ -50,6 +62,8 @@ class DslExecutionCoordinatorActor(
 
         if isinstance(message.query, FindQuery):
             return self._dispatch_find(message.query)
+        if isinstance(message.query, DistanceQuery):
+            return self._dispatch_distance(message.query)
         return self._dispatch_context(message.query)
 
     def on_evaluating_find_candidates_find_candidate_evaluated(
@@ -89,6 +103,7 @@ class DslExecutionCoordinatorActor(
 
         ordered = [self._context_results[index] for index in sorted(self._context_results)]
         deduplicated = self._minimal_windows(ordered)
+        deduplicated = [self._with_context_distances(match, query) for match in deduplicated]
 
         self._collector.tell(DslQueryExecuted(result=ContextQueryExecutionResult(
             query=query,
@@ -155,6 +170,63 @@ class DslExecutionCoordinatorActor(
             worker.tell(EvaluateContextWindowRequest(window_index=index, nodes=nodes, query=query))
 
         return DslExecutionCoordinatorState.EVALUATING_CONTEXT_WINDOWS
+
+    def _dispatch_distance(self, query: DistanceQuery) -> DslExecutionCoordinatorState:
+        try:
+            distance_return = self._distance_calculator.distance_return(query.returns)
+            pairs = self._distance_calculator.calculate_pairs(
+                query.left,
+                query.right,
+                query.within,
+                query.limit_pairs,
+                distance_return.entity_name,
+            )
+            self._collector.tell(DslQueryExecuted(result=DistanceQueryExecutionResult(
+                query=query,
+                source_path=self._index.document.source_path,
+                pairs=pairs,
+            )))
+        except Exception as error:
+            self._collector.tell(DslExecutionFailed(error))
+        return DslExecutionCoordinatorState.COMPLETED
+
+    def _with_context_distances(self, match: ContextWindowMatch, query: ContextQuery) -> ContextWindowMatch:
+        distance_returns = [item for item in query.returns or () if isinstance(item, DistanceReturn)]
+        if not distance_returns:
+            return match
+
+        selector_nodes: list[tuple[str, AstNode]] = []
+        for pattern_match in match.matches:
+            for node in pattern_match.nodes:
+                selector_nodes.append((pattern_match.name, node))
+
+        distances = []
+        for distance_return in distance_returns:
+            for left_index, (left_name, left_node) in enumerate(selector_nodes):
+                for right_name, right_node in selector_nodes[left_index + 1:]:
+                    if left_node.start < right_node.start:
+                        first_name, first_node = left_name, left_node
+                        second_name, second_node = right_name, right_node
+                    else:
+                        first_name, first_node = right_name, right_node
+                        second_name, second_node = left_name, left_node
+                    if first_node.start < second_node.end and second_node.start < first_node.end:
+                        continue
+                    distances.append({
+                        "left": {"pattern": first_name, "node": render_compact_node(first_node)},
+                        "right": {"pattern": second_name, "node": render_compact_node(second_node)},
+                        "distance": {
+                            "unit": distance_return.entity_name,
+                            "value": self._distance_calculator.count_between(
+                                first_node,
+                                second_node,
+                                distance_return.entity_name,
+                            ),
+                        },
+                    })
+
+        match.distances.extend(distances)
+        return match
 
     @staticmethod
     def _resolve_max_window_length(operator: str, value: int) -> int | None:

@@ -10,7 +10,8 @@
 4. [Конфигурация AST-парсера](./ast_parser_configuration.md)
 5. [Архитектура DSL](./dsl_architecture.md)
 6. [Описание DSL](./dsl_language.md)
-7. [Быстрый старт по DSL](./dsl_quickstart.md)
+7. [DSL: расстояния и примеры на GA_1_2025.tex](./dsl_distance_functionality.md)
+8. [Быстрый старт по DSL](./dsl_quickstart.md)
 
 Такой порядок соответствует реальной зависимости подсистем:
 
@@ -34,6 +35,7 @@
 
 - [Архитектура DSL](./dsl_architecture.md)
 - [Описание DSL](./dsl_language.md)
+- [DSL: расстояния и примеры на GA_1_2025.tex](./dsl_distance_functionality.md)
 - [EBNF-грамматика DSL](./dsl_grammar.ebnf)
 - [Быстрый старт по DSL](./dsl_quickstart.md)
 

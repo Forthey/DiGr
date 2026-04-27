@@ -16,7 +16,7 @@
    относительно AST / ParserConfig конкретного формата.
 *)
 
-query                = context_query | find_query ;
+query                = context_query | find_query | distance_query ;
 
 context_query        = "CONTEXT" , span_spec ,
                        "FOR" , pattern_list ,
@@ -31,8 +31,16 @@ find_query           = "FIND" , entity_name ,
                        [ return_clause ] ,
                        [ ";" ] ;
 
+distance_query       = "DISTANCE" , selector ,
+                       "TO" , selector ,
+                       { within_clause } ,
+                       [ limit_pairs_clause ] ,
+                       return_clause ,
+                       [ ";" ] ;
+
 span_spec            = entity_name , "[" , count_constraint , "]" ;
 within_clause        = "WITHIN" , entity_name , "[" , count_constraint , "]" ;
+limit_pairs_clause   = "LIMIT_PAIRS" , ( "nearest" | "all_nearest" | "all" | integer ) ;
 
 count_constraint     = count_operator , integer ;
 count_operator       = "=" | "<=" | "<" | ">=" | ">" ;
@@ -82,6 +90,9 @@ return_item          = "window"
                      | "nodes"
                      | "count"
                      | "source"
+                     | "pairs"
+                     | "stats"
+                     | "distance" , "(" , entity_name , ")"
                      | identifier ;
 
 entity_name          = identifier ;
@@ -133,4 +144,9 @@ digit                = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
    FIND sentence
    WHERE has_child(word[text ~= /не.*/]) AND has_descendant(word[text = "тишина"])
    RETURN nodes, count;
+
+   DISTANCE semantic_block[metadata.kind = "theorem"]
+   TO semantic_block[metadata.kind = "definition"]
+   LIMIT_PAIRS all_nearest
+   RETURN pairs, stats, distance(semantic_block), count;
 *)

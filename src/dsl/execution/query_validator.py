@@ -4,6 +4,8 @@ from ..model.query_ast import (
     BinaryExpression,
     ComparisonExpression,
     ContextQuery,
+    DistanceQuery,
+    DistanceReturn,
     DslQuery,
     Expression,
     FieldRef,
@@ -20,7 +22,7 @@ from .document_index import DocumentIndex
 
 class QueryValidator:
     def validate(self, query: DslQuery, index: DocumentIndex) -> None:
-        known_entities = index.entities()
+        known_entities = index.entities() | {"symbol"}
         missing_entities = sorted(self._collect_entities(query) - known_entities)
         if missing_entities:
             raise ValueError(
@@ -36,8 +38,23 @@ class QueryValidator:
                 items.update(self._collect_pattern_entities(pattern))
             for within in query.within:
                 items.add(within.entity_name)
+            for item in query.returns or ():
+                if isinstance(item, DistanceReturn):
+                    items.add(item.entity_name)
             if query.where is not None:
                 items.update(self._collect_expression_entities(query.where))
+            return items
+
+        if isinstance(query, DistanceQuery):
+            items.update(self._collect_selector_entities(query.left))
+            items.update(self._collect_selector_entities(query.right))
+            for within in query.within:
+                items.add(within.entity_name)
+            distance_returns = [item for item in query.returns or () if isinstance(item, DistanceReturn)]
+            if len(distance_returns) != 1:
+                raise ValueError("DISTANCE query requires exactly one RETURN distance(entity) item")
+            for item in distance_returns:
+                items.add(item.entity_name)
             return items
 
         items.add(query.entity_name)

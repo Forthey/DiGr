@@ -49,7 +49,13 @@ class ConfigLoader:
             raise ValueError(f"Format '{name}' must define 'reader' mapping")
         if not isinstance(root_entity, str) or not root_entity:
             raise ValueError(f"Format '{name}' must define non-empty 'root_entity'")
-        return FormatConfig(name=name, reader=reader, root_entity=root_entity)
+        symbols = data.get("symbols", {})
+        if not isinstance(symbols, dict):
+            raise ValueError(f"Format '{name}' symbols must be a mapping")
+        exclude = symbols.get("exclude", [])
+        if not isinstance(exclude, list) or any(not isinstance(item, str) for item in exclude):
+            raise ValueError(f"Format '{name}' symbols.exclude must be a list of strings")
+        return FormatConfig(name=name, reader=reader, root_entity=root_entity, symbols={"exclude": list(exclude)})
 
     def _parse_entity(self, name: str, data: Any) -> EntityConfig:
         if not isinstance(data, dict):

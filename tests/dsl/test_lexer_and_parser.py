@@ -2,7 +2,17 @@ from __future__ import annotations
 
 import pytest
 
-from dsl import ActorDslParser, DslLexer, DslSyntaxError, DslTokenStreamParser, FindQuery, SpanSpec, TokenKind
+from dsl import (
+    ActorDslParser,
+    DistanceQuery,
+    DistanceReturn,
+    DslLexer,
+    DslSyntaxError,
+    DslTokenStreamParser,
+    FindQuery,
+    SpanSpec,
+    TokenKind,
+)
 
 
 def test_dsl_lexer_tokenizes_keywords_literals_and_regex() -> None:
@@ -63,6 +73,36 @@ def test_dsl_parser_builds_find_query() -> None:
     assert isinstance(query, FindQuery)
     assert query.entity_name == "sentence"
     assert query.returns == ["text"]
+
+
+def test_dsl_parser_builds_distance_query() -> None:
+    source = """
+    DISTANCE semantic_block[metadata.kind = "theorem"]
+    TO semantic_block[metadata.kind = "definition"]
+    WITHIN content_scope[=1]
+    LIMIT_PAIRS all_nearest
+    RETURN pairs, stats, distance(word), count
+    """
+
+    query = DslTokenStreamParser(DslLexer().tokenize(source)).parse_query()
+
+    assert isinstance(query, DistanceQuery)
+    assert query.left.entity_name == "semantic_block"
+    assert query.right.entity_name == "semantic_block"
+    assert query.within[0].entity_name == "content_scope"
+    assert query.limit_pairs.mode == "all_nearest"
+    assert isinstance(query.returns[2], DistanceReturn)
+    assert query.returns[2].entity_name == "word"
+
+
+def test_dsl_parser_builds_distance_query_with_integer_limit() -> None:
+    query = ActorDslParser().parse(
+        "DISTANCE sentence[text ~= /телефон/i] TO sentence[text ~= /тишина/i] LIMIT_PAIRS 3 RETURN distance(word)"
+    )
+
+    assert isinstance(query, DistanceQuery)
+    assert query.limit_pairs.mode == "k"
+    assert query.limit_pairs.value == 3
 
 
 def test_dsl_parser_treats_bracketed_argument_as_span_spec() -> None:

@@ -51,7 +51,10 @@ class DslQueryParserActor(Actor[DslQueryParserState, QueryParserMessage, QueryPa
             if parser.current.kind is TokenKind.FIND:
                 self.put(ContinueFindTargetParsing())
                 return DslQueryParserState.PARSING_FIND_TARGET
-            raise parser._error("Query must start with CONTEXT or FIND")
+            if parser.current.kind is TokenKind.DISTANCE:
+                self._reply(DslQueryParsed(query=parser.parse_query()))
+                return DslQueryParserState.READY
+            raise parser._error("Query must start with CONTEXT, FIND, or DISTANCE")
         except Exception as error:
             return self._fail(error)
 

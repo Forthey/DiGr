@@ -12,8 +12,11 @@ class TokenKind(Enum):
 
     CONTEXT = auto()
     FIND = auto()
+    DISTANCE = auto()
     FOR = auto()
+    TO = auto()
     WITHIN = auto()
+    LIMIT_PAIRS = auto()
     WHERE = auto()
     RETURN = auto()
     AND = auto()

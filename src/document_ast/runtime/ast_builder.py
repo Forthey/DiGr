@@ -12,6 +12,7 @@ class AstBuilder:
     def __init__(self, config: ParserConfig, segmenter: TextSegmenter | None = None) -> None:
         self._config = config
         self._segmenter = segmenter or TextSegmenter()
+        self._excluded_symbols = set(config.format_config.symbols.get("exclude", []))
 
     def build(self, document: SourceDocument) -> AstDocument:
         if self._config.format_name != document.format_name:
@@ -50,6 +51,8 @@ class AstBuilder:
                     segment.start,
                 )
             ]
+        else:
+            children = self._build_symbol_nodes(segment)
 
         return AstNode(
             entity=entity_name,
@@ -63,3 +66,15 @@ class AstBuilder:
     def _segment_entity(self, entity_name: str, text: str, base_start: int) -> list[TextSegment]:
         entity_config = self._config.get_entity(entity_name)
         return self._segmenter.segment(text, base_start, entity_config.segmenter)
+
+    def _build_symbol_nodes(self, segment: TextSegment) -> list[AstNode]:
+        return [
+            AstNode(
+                entity="symbol",
+                text=char,
+                start=segment.start + index,
+                end=segment.start + index + 1,
+            )
+            for index, char in enumerate(segment.text)
+            if char not in self._excluded_symbols
+        ]

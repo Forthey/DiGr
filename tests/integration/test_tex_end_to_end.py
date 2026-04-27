@@ -28,12 +28,12 @@ def test_tex_parser_builds_ast_for_ga_source(ga_tex_document) -> None:
     assert ga_tex_document.root.children
 
 
-def test_tex_dsl_finds_definitions_theorems_and_frame_scopes(ga_tex_document) -> None:
+def test_tex_dsl_finds_terms_theorems_and_frame_scopes(ga_tex_document) -> None:
     engine = ActorDslEngine()
 
-    definitions = engine.execute(
+    terms = engine.execute(
         ga_tex_document,
-        'FIND semantic_block WHERE metadata.kind = "definition" RETURN count',
+        r'FIND semantic_block WHERE text ~= /\\odmkey/ RETURN count',
     ).to_dict()
     theorems = engine.execute(
         ga_tex_document,
@@ -44,19 +44,19 @@ def test_tex_dsl_finds_definitions_theorems_and_frame_scopes(ga_tex_document) ->
         'FIND content_scope WHERE metadata.kind = "frame" RETURN count',
     ).to_dict()
 
-    assert definitions["count"] >= 1
+    assert terms["count"] >= 1
     assert theorems["count"] >= 1
     assert frame_scopes["count"] >= 1
 
 
-def test_tex_dsl_finds_definition_text_within_section_context(ga_tex_document) -> None:
+def test_tex_dsl_finds_term_text_within_section_context(ga_tex_document) -> None:
     engine = ActorDslEngine()
 
     payload = engine.execute(
         ga_tex_document,
         """
         FIND semantic_block
-        WHERE metadata.kind = "definition"
+        WHERE text ~= /Левым разбором/
           AND has_ancestor(section[text ~= /Языки и грамматики/])
         RETURN text, count
         """.strip(),
@@ -64,3 +64,41 @@ def test_tex_dsl_finds_definition_text_within_section_context(ga_tex_document) -
 
     assert payload["count"] >= 1
     assert "левым разбором" in payload["items"][0]["text"].lower()
+
+
+def test_tex_dsl_measures_distance_between_theorem_and_proof(ga_tex_document) -> None:
+    engine = ActorDslEngine()
+
+    payload = engine.execute(
+        ga_tex_document,
+        """
+        DISTANCE semantic_block[metadata.kind = "theorem"]
+        TO semantic_block[metadata.kind = "proof"]
+        LIMIT_PAIRS all_nearest
+        RETURN pairs, stats, distance(semantic_block), count
+        """.strip(),
+    ).to_dict()
+
+    assert payload["type"] == "distance_query_execution_result"
+    assert payload["count"] >= 1
+    assert payload["items"][0]["distance"]["unit"] == "semantic_block"
+    assert payload["items"][0]["distance"]["value"] == 0
+    assert payload["stats"]["count"] == payload["count"]
+
+
+def test_tex_dsl_measures_symbol_distance_between_semantic_blocks(ga_tex_document) -> None:
+    engine = ActorDslEngine()
+
+    payload = engine.execute(
+        ga_tex_document,
+        """
+        DISTANCE semantic_block[text ~= /Степень!слова/]
+        TO semantic_block[metadata.kind = "theorem"]
+        LIMIT_PAIRS all_nearest
+        RETURN pairs, stats, distance(symbol), count
+        """.strip(),
+    ).to_dict()
+
+    assert payload["type"] == "distance_query_execution_result"
+    assert payload["count"] == 1
+    assert payload["items"][0]["distance"]["unit"] == "symbol"

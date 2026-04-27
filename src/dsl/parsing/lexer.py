@@ -7,8 +7,11 @@ from .token_kind import TokenKind
 _KEYWORDS = {
     "CONTEXT": TokenKind.CONTEXT,
     "FIND": TokenKind.FIND,
+    "DISTANCE": TokenKind.DISTANCE,
     "FOR": TokenKind.FOR,
+    "TO": TokenKind.TO,
     "WITHIN": TokenKind.WITHIN,
+    "LIMIT_PAIRS": TokenKind.LIMIT_PAIRS,
     "WHERE": TokenKind.WHERE,
     "RETURN": TokenKind.RETURN,
     "AND": TokenKind.AND,

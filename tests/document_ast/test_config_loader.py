@@ -38,7 +38,31 @@ def test_config_loader_parses_current_txt_config(config_dir: Path) -> None:
 
     assert config.format_name == "txt"
     assert config.format_config.root_entity == "page"
+    assert config.format_config.symbols == {"exclude": []}
     assert config.get_entity("sentence").contains == "clause"
+
+
+def test_config_loader_parses_symbol_exclusions(workspace_tmp: Path) -> None:
+    path = write_config(
+        workspace_tmp / "config.yaml",
+        """
+        format:
+          name: sample
+          reader:
+            kind: plain_text
+          root_entity: page
+          symbols:
+            exclude: [" ", "\\n"]
+        entities:
+          page:
+            segmenter:
+              kind: passthrough
+        """,
+    )
+
+    config = ConfigLoader().load(path, expected_format_name="sample")
+
+    assert config.format_config.symbols == {"exclude": [" ", "\n"]}
 
 
 @pytest.mark.parametrize(
@@ -112,4 +136,26 @@ def test_config_loader_rejects_cycles(workspace_tmp: Path) -> None:
     )
 
     with pytest.raises(ValueError, match="contains a cycle"):
+        ConfigLoader().load(path)
+
+
+def test_config_loader_rejects_invalid_symbol_exclusions(workspace_tmp: Path) -> None:
+    path = write_config(
+        workspace_tmp / "config.yaml",
+        """
+        format:
+          name: sample
+          reader:
+            kind: plain_text
+          root_entity: page
+          symbols:
+            exclude: " "
+        entities:
+          page:
+            segmenter:
+              kind: passthrough
+        """,
+    )
+
+    with pytest.raises(ValueError, match="symbols.exclude"):
         ConfigLoader().load(path)

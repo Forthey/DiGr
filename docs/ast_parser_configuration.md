@@ -32,6 +32,8 @@ format:
   reader:
     kind: plain_text
   root_entity: page
+  symbols:
+    exclude: []
 
 entities:
   page:
@@ -107,6 +109,30 @@ entities:
           - `word`
 
 Здесь `root_entity` равно `page`.
+
+### `format.symbols`
+
+Опциональная настройка универсальной сущности `symbol`.
+`symbol` создаётся автоматически для листовых узлов, то есть для сущностей без `contains`.
+Каждый `symbol` соответствует одному Unicode code point исходного текста.
+
+По умолчанию исключений нет:
+
+```yaml
+format:
+  symbols:
+    exclude: []
+```
+
+Если нужно не создавать `symbol` для пробелов или переводов строк:
+
+```yaml
+format:
+  symbols:
+    exclude: [" ", "\n", "\t"]
+```
+
+`symbol` не нужно добавлять в `entities`: это системная сущность, доступная DSL во всех форматах.
 
 ## Раздел `entities`
 

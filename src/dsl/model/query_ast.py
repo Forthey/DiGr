@@ -86,6 +86,20 @@ class Pattern(Serializable):
 
 
 @dataclass(slots=True)
+class DistanceReturn(Serializable):
+    entity_name: str
+
+
+ReturnItem: TypeAlias = str | DistanceReturn
+
+
+@dataclass(slots=True)
+class PairLimit(Serializable):
+    mode: str
+    value: int | None = None
+
+
+@dataclass(slots=True)
 class ComparisonExpression(Serializable):
     left: FieldRef
     operator: str
@@ -119,7 +133,7 @@ class ContextQuery(Serializable):
     patterns: list[Pattern]
     within: list[WithinConstraint]
     where: Expression | None = None
-    returns: list[str] | None = None
+    returns: list[ReturnItem] | None = None
 
 
 @dataclass(slots=True)
@@ -127,7 +141,16 @@ class FindQuery(Serializable):
     entity_name: str
     where: Expression | None = None
     within: list[WithinConstraint] | None = None
-    returns: list[str] | None = None
+    returns: list[ReturnItem] | None = None
 
 
-DslQuery: TypeAlias = ContextQuery | FindQuery
+@dataclass(slots=True)
+class DistanceQuery(Serializable):
+    left: Selector
+    right: Selector
+    within: list[WithinConstraint]
+    limit_pairs: PairLimit
+    returns: list[ReturnItem] | None = None
+
+
+DslQuery: TypeAlias = ContextQuery | FindQuery | DistanceQuery

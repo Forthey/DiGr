@@ -10,6 +10,7 @@
 - `subsection_scope`
 - `content_scope`
 - `semantic_block`
+- `symbol`
 
 `content_scope` и `semantic_block` используют `metadata.kind`.
 
@@ -34,6 +35,9 @@
 - `plain`
 
 Это позволяет искать смысловые блоки DSL-запросами, не делая полноценный синтаксический анализ TeX.
+
+`symbol` создаётся автоматически под `semantic_block`.
+Он соответствует одному Unicode code point исходного TeX-текста и доступен для `FIND`, `CONTEXT` и `DISTANCE`, например через `distance(symbol)`.
 
 ## Как загрузить `GA_1_2025.tex`
 

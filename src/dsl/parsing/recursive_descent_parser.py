@@ -5,6 +5,8 @@ from ..model.query_ast import (
     ComparisonExpression,
     ContextQuery,
     CountConstraint,
+    DistanceQuery,
+    DistanceReturn,
     DslQuery,
     DslValue,
     Expression,
@@ -12,8 +14,10 @@ from ..model.query_ast import (
     FindQuery,
     FunctionExpression,
     NotExpression,
+    PairLimit,
     Pattern,
     RegexLiteral,
+    ReturnItem,
     Selector,
     SpanSpec,
     WithinConstraint,
@@ -74,8 +78,10 @@ class DslTokenStreamParser:
             query = self.parse_context_query()
         elif self.current.kind is TokenKind.FIND:
             query = self.parse_find_query()
+        elif self.current.kind is TokenKind.DISTANCE:
+            query = self.parse_distance_query()
         else:
-            raise self._error("Query must start with CONTEXT or FIND")
+            raise self._error("Query must start with CONTEXT, FIND, or DISTANCE")
         self.consume_query_terminator()
         self.expect(TokenKind.EOF, "Unexpected tokens after end of query")
         return query
@@ -105,7 +111,23 @@ class DslTokenStreamParser:
         returns = self.parse_return_clause()
         return FindQuery(entity_name=entity_name, where=where, within=within, returns=returns)
 
-    def parse_context_constraints(self) -> tuple[list[WithinConstraint], Expression | None, list[str]]:
+    def parse_distance_query(self) -> DistanceQuery:
+        self.expect(TokenKind.DISTANCE, "Expected DISTANCE")
+        left = self.parse_selector()
+        self.expect(TokenKind.TO, "Expected TO after left distance selector")
+        right = self.parse_selector()
+        within = self.parse_within_clauses()
+        limit_pairs = self.parse_limit_pairs_clause()
+        returns = self.parse_return_clause()
+        return DistanceQuery(
+            left=left,
+            right=right,
+            within=within,
+            limit_pairs=limit_pairs,
+            returns=returns,
+        )
+
+    def parse_context_constraints(self) -> tuple[list[WithinConstraint], Expression | None, list[ReturnItem]]:
         within = self.parse_within_clauses()
         where = self.parse_where_clause()
         returns = self.parse_return_clause()
@@ -113,7 +135,7 @@ class DslTokenStreamParser:
         self.expect(TokenKind.EOF, "Unexpected tokens after end of CONTEXT query")
         return within, where, returns
 
-    def parse_find_constraints(self) -> tuple[Expression | None, list[WithinConstraint], list[str]]:
+    def parse_find_constraints(self) -> tuple[Expression | None, list[WithinConstraint], list[ReturnItem]]:
         where = self.parse_where_clause()
         within = self.parse_within_clauses()
         returns = self.parse_return_clause()
@@ -139,13 +161,37 @@ class DslTokenStreamParser:
             return None
         return self.parse_boolean_expression()
 
-    def parse_return_clause(self) -> list[str]:
+    def parse_limit_pairs_clause(self) -> PairLimit:
+        if not self.match(TokenKind.LIMIT_PAIRS):
+            return PairLimit(mode="nearest")
+        if self.current.kind is TokenKind.INTEGER:
+            value = self.advance().value
+            if value <= 0:
+                raise self._error("LIMIT_PAIRS integer must be positive")
+            return PairLimit(mode="k", value=value)
+        mode = self.parse_identifier("Expected LIMIT_PAIRS mode")
+        if mode not in {"nearest", "all_nearest", "all"}:
+            raise self._error("Expected LIMIT_PAIRS nearest, all_nearest, all, or positive integer")
+        return PairLimit(mode=mode)
+
+    def parse_return_clause(self) -> list[ReturnItem]:
         if not self.match(TokenKind.RETURN):
             return []
-        items = [self.parse_identifier("Expected return item after RETURN")]
+        items = [self.parse_return_item()]
         while self.match(TokenKind.COMMA):
-            items.append(self.parse_identifier("Expected return item after ','"))
+            items.append(self.parse_return_item())
         return items
+
+    def parse_return_item(self) -> ReturnItem:
+        if self.current.kind is TokenKind.DISTANCE:
+            name = self.advance().value
+        else:
+            name = self.parse_identifier("Expected return item")
+        if name == "distance" and self.match(TokenKind.LPAREN):
+            entity_name = self.parse_identifier("Expected entity name in distance()")
+            self.expect(TokenKind.RPAREN, "Expected ')' after distance entity")
+            return DistanceReturn(entity_name=entity_name)
+        return name
 
     def parse_pattern_list(self) -> list[Pattern]:
         items = [self.parse_pattern()]

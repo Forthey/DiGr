@@ -55,7 +55,11 @@ def test_tex_format_builds_expected_scopes_and_semantic_blocks(workspace_tmp: Pa
     theorem = next(node for node in nodes if node.entity == "semantic_block" and node.metadata.get("kind") == "theorem")
     definition = next(node for node in nodes if node.entity == "semantic_block" and node.metadata.get("kind") == "definition")
     proof = next(node for node in nodes if node.entity == "semantic_block" and node.metadata.get("kind") == "proof")
+    symbols = [node for node in nodes if node.entity == "symbol"]
 
     assert "Теорема внутри frame." in theorem.text
     assert "Определение вне frame." in definition.text
     assert "Доказательство вне frame." in proof.text
+    assert symbols
+    assert any(node.text == "\\" for node in symbols)
+    assert "symbol" in {child.entity for child in theorem.children}

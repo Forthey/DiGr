@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
-from document_ast import ActorAstParser
+from document_ast import ActorAstParser, ConfigLoader
 from document_ast.model.source_document import SourceDocument
 from document_ast.runtime.ast_builder import AstBuilder
 from document_ast.source.plain_text_reader import PlainTextReader
@@ -50,8 +51,41 @@ def test_ast_builder_builds_expected_hierarchy(txt_config) -> None:
 
     sentences = [node for node in walk(built.root) if node.entity == "sentence"]
     words = [node for node in walk(built.root) if node.entity == "word"]
+    symbols = [node for node in walk(built.root) if node.entity == "symbol"]
     assert [node.text for node in sentences] == ["One.", "Two!"]
     assert [node.text for node in words] == ["One", "Two"]
+    assert [node.text for node in symbols] == ["O", "n", "e", "T", "w", "o"]
+    assert [(node.start, node.end) for node in symbols[:3]] == [(0, 1), (1, 2), (2, 3)]
+
+
+def test_ast_builder_respects_symbol_exclusions(workspace_tmp: Path) -> None:
+    config_path = workspace_tmp / "sample.yaml"
+    config_path.write_text(
+        dedent(
+            """
+            format:
+              name: sample
+              reader:
+                kind: plain_text
+              root_entity: page
+              symbols:
+                exclude: [" "]
+            entities:
+              page:
+                segmenter:
+                  kind: passthrough
+            """
+        ).strip() + "\n",
+        encoding="utf-8",
+    )
+    config = ConfigLoader().load(config_path, expected_format_name="sample")
+    document = SourceDocument(path="memory.txt", format_name="sample", text="A B")
+
+    built = AstBuilder(config).build(document)
+    symbols = [node for node in walk(built.root) if node.entity == "symbol"]
+
+    assert [node.text for node in symbols] == ["A", "B"]
+    assert [(node.start, node.end) for node in symbols] == [(0, 1), (2, 3)]
 
 
 def test_ast_builder_rejects_mismatched_document_format(txt_config) -> None:

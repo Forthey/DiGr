@@ -46,6 +46,7 @@ class DslExecutionRuntimeFactory:
             index=index,
             workers=[worker.as_handle() for worker in workers],
             collector=collector.as_handle(),
+            evaluator=evaluator,
         )
         coordinator.bind(driver)
 
