@@ -34,7 +34,16 @@ entities:
       drop_empty: true
 
   semantic_block:
+    contains: definition
+    symbols: true
     segmenter:
       kind: latex_semantic_block
+      trim: true
+      drop_empty: true
+
+  definition:
+    symbols: false
+    segmenter:
+      kind: latex_definition
       trim: true
       drop_empty: true

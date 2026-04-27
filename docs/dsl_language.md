@@ -89,14 +89,14 @@ RETURN text, matches
 
 ```dsl
 DISTANCE semantic_block[metadata.kind = "theorem"]
-TO semantic_block[metadata.kind = "definition"]
+TO semantic_block[metadata.kind = "example"]
 LIMIT_PAIRS all_nearest
 RETURN pairs, stats, distance(semantic_block), count
 ```
 
 Смысл:
 
-- взять все блоки-теоремы и блоки-определения;
+- взять все блоки-теоремы и блоки-примеры;
 - построить пары непересекающихся узлов;
 - посчитать количество `semantic_block` строго между элементами пары;
 - вернуть ближайшие пары и статистику по расстояниям.

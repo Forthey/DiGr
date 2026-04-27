@@ -205,6 +205,32 @@ class LatexSemanticBlockStrategy(SegmentStrategy):
         return "plain"
 
 
+class LatexDefinitionStrategy(SegmentStrategy):
+    _definition_pattern = re.compile(
+        r"\\odmkey\{(?P<name>.*?)\}\{(?P<index>.*?)\}",
+        flags=re.MULTILINE | re.DOTALL,
+    )
+
+    def segment(
+            self,
+            text: str,
+            base_start: int,
+            segmenter_config: dict[str, Any],
+    ) -> list[TextSegment]:
+        return [
+            TextSegment(
+                text=match.group(0),
+                start=base_start + match.start(),
+                end=base_start + match.end(),
+                metadata={
+                    "name": " ".join(match.group("name").split()),
+                    "index": " ".join(match.group("index").split()),
+                },
+            )
+            for match in self._definition_pattern.finditer(text)
+        ]
+
+
 def resolve_flags(segmenter_config: dict[str, Any]) -> int:
     flags = re.MULTILINE
     for name in segmenter_config.get("flags", []):
@@ -253,6 +279,7 @@ class TextSegmenter:
             "match": MatchStrategy(),
             "latex_content_scope": LatexContentScopeStrategy(),
             "latex_semantic_block": LatexSemanticBlockStrategy(),
+            "latex_definition": LatexDefinitionStrategy(),
         }
 
     def register(self, kind: str, strategy: SegmentStrategy) -> None:

@@ -13,6 +13,8 @@ DSL работает поверх уже построенного `AstDocument`:
 - `subsection_scope` - область подраздела или текст до первого подраздела;
 - `content_scope` - область содержимого, в том числе `frame` или свободный текст;
 - `semantic_block` - прикладной TeX-блок.
+- `definition` - терминологическое определение, выделенное командой `\odmkey{...}{...}`;
+- `symbol` - универсальная сущность одного символа исходного текста.
 
 У `content_scope` и `semantic_block` есть `metadata.kind`.
 Для `semantic_block` практически важны значения:
@@ -29,18 +31,22 @@ DSL работает поверх уже построенного `AstDocument`:
 - `frametitle`;
 - `subsubsection`.
 
-Отдельно про определения в `GA_1_2025.tex`: окружение `\begin{definition}...\end{definition}` встречается только один раз.
-Поэтому примеры и аналитические запросы не должны опираться на `metadata.kind = "definition"` как на регулярную разметку определений.
-В этом файле большинство терминологических определений размечены командой `\odmkey{...}{...}` внутри обычных `semantic_block`, чаще всего с `metadata.kind = "plain"`.
-Если нужно искать именно учебные определения/термины, практичнее использовать selector по тексту:
+Отдельно про определения в `GA_1_2025.tex`: терминологические определения в основном размечены командой `\odmkey{...}{...}`.
+В AST они доступны как дочерние узлы `definition` внутри `semantic_block`.
+У `definition` есть метаданные:
+
+- `metadata.name` - видимый термин из первого аргумента `\odmkey`;
+- `metadata.index` - индексная форма из второго аргумента `\odmkey`.
+
+Если нужно искать учебные определения/термины, используйте отдельную сущность:
 
 ```dsl
-semantic_block[text ~= /\\odmkey/]
+definition
 ```
 
 Важно: текущий `tex.yaml` не строит сущность `word`.
 Зато во всех форматах теперь автоматически есть универсальная сущность `symbol`.
-Для TeX она создаётся под leaf-узлами `semantic_block`, поэтому `distance(symbol)` позволяет измерять расстояние в символах исходного TeX-текста.
+Для TeX она создаётся под `semantic_block`, поэтому `distance(symbol)` позволяет измерять расстояние в символах исходного TeX-текста.
 Если нужно исключать пробелы или переводы строк из `symbol`, это настраивается в `format.symbols.exclude`.
 
 ## Какие запросы есть
@@ -61,16 +67,15 @@ RETURN item, item, ...
 Пример:
 
 ```dsl
-FIND semantic_block
-WHERE text ~= /\\odmkey/
+FIND definition
 RETURN text, count
 ```
 
 Что делает:
 
-1. Берёт все узлы `semantic_block`.
-2. Оставляет блоки, внутри которых встречается команда `\odmkey`.
-3. Возвращает текст найденных блоков и их количество.
+1. Берёт все узлы `definition`.
+2. Возвращает исходный TeX-текст найденных `\odmkey{...}{...}` и их количество.
+3. Если добавить `RETURN nodes`, в `metadata` будут доступны `name` и `index`.
 
 ### CONTEXT
 
@@ -210,12 +215,12 @@ RETURN pairs, stats, distance(semantic_block), count
 На текущем `GA_1_2025.tex` результат содержит `3` пары.
 Статистика по ним: `mean = 0.6666666666666666`, `variance = 0.22222222222222224`, `min = 0`, `max = 1`.
 
-### 3. Терминологические определения через odmkey рядом с theorem
+### 3. Терминологические определения рядом с theorem
 
 Запрос:
 
 ```dsl
-DISTANCE semantic_block[text ~= /\\odmkey/]
+DISTANCE definition
 TO semantic_block[metadata.kind = "theorem"]
 LIMIT_PAIRS 3
 RETURN pairs, stats, distance(semantic_block), count
@@ -223,18 +228,18 @@ RETURN pairs, stats, distance(semantic_block), count
 
 Общий смысл:
 
-Найти терминологические блоки с `\odmkey` рядом с theorem.
-В `GA_1_2025.tex` это более корректная модель "определений", чем `metadata.kind = "definition"`, потому что терминология размечена командой `\odmkey`.
+Найти терминологические определения рядом с theorem.
+Это использует отдельные узлы `definition`, которые создаются из команд `\odmkey{...}{...}`.
 
 Пошагово:
 
-1. Выбираются все `semantic_block`, в тексте которых есть `\odmkey`.
+1. Выбираются все узлы `definition`.
 2. Выбираются все theorem-блоки.
-3. Строятся пары "терминологический блок - theorem".
+3. Строятся пары "definition - theorem".
 4. Считается число `semantic_block` между ними.
 5. `LIMIT_PAIRS 3` возвращает три ближайшие пары.
 
-На текущем `GA_1_2025.tex` для трёх ближайших пар расстояние равно `0`: терминологический блок непосредственно соседствует с theorem.
+На текущем `GA_1_2025.tex` для трёх ближайших пар расстояние равно `0`: definition находится внутри semantic-блока, который непосредственно соседствует с theorem.
 
 ### 4. Ограничение пары контейнером WITHIN
 
@@ -267,7 +272,7 @@ RETURN pairs, stats, distance(semantic_block), count
 Запрос:
 
 ```dsl
-DISTANCE semantic_block[text ~= /Степень!слова/]
+DISTANCE definition[metadata.name = "степень"]
 TO semantic_block[metadata.kind = "theorem"]
 LIMIT_PAIRS all_nearest
 RETURN pairs, stats, distance(symbol), count
@@ -275,17 +280,17 @@ RETURN pairs, stats, distance(symbol), count
 
 Общий смысл:
 
-Измерить расстояние не в semantic-блоках, а в символах между конкретным терминологическим блоком и ближайшей theorem.
+Измерить расстояние не в semantic-блоках, а в символах между конкретным определением и ближайшей theorem.
 
 Пошагово:
 
-1. Выбирается `semantic_block`, где встречается `Степень!слова`.
+1. Выбирается `definition` с `metadata.name = "степень"`.
 2. Выбираются все theorem-блоки.
-3. Строятся пары между выбранным терминологическим блоком и theorem.
+3. Строятся пары между выбранным definition и theorem.
 4. Для каждой пары считаются `symbol`, лежащие строго между блоками.
 5. `all_nearest` оставляет ближайшую пару или несколько пар с одинаковым минимальным расстоянием.
 
-В текущем `GA_1_2025.tex` ближайший theorem идёт сразу после такого терминологического блока, поэтому `distance(symbol)` равно `0`.
+В текущем `GA_1_2025.tex` ближайший theorem идёт после semantic-блока, содержащего это definition, поэтому `distance(symbol)` равно `344`.
 
 ## Примеры на GA_1_2025.tex: CONTEXT с distance
 
@@ -343,31 +348,31 @@ RETURN matches, distance(semantic_block), count
 
 На текущем `GA_1_2025.tex` первый найденный такой контекст даёт расстояние `5` `semantic_block` между theorem и example.
 
-### 3. Окно с терминологическим блоком odmkey и theorem
+### 3. Окно с definition и theorem
 
 Запрос:
 
 ```dsl
 CONTEXT semantic_block[<=4]
-FOR term: semantic_block[text ~= /\\odmkey/],
+FOR term: definition,
     th: semantic_block[metadata.kind = "theorem"]
 RETURN matches, distance(semantic_block), count
 ```
 
 Общий смысл:
 
-Проверить, есть ли терминологический блок с `\odmkey` рядом с theorem в коротком окне до 4 semantic-блоков.
+Проверить, есть ли definition рядом с theorem в коротком окне до 4 semantic-блоков.
 
 Пошагово:
 
 1. Строятся окна до 4 подряд идущих `semantic_block`.
-2. В каждом окне ищется блок с `\odmkey`.
+2. В каждом окне ищется дочерний узел `definition`.
 3. В каждом окне ищется theorem.
 4. Если оба элемента не попали в одно окно, окно не возвращается.
 5. Для найденных selector-узлов считается расстояние в `semantic_block`.
 
 На текущем `GA_1_2025.tex` такой запрос возвращает локальные окна.
-Первый найденный контекст имеет расстояние `0`: блок с `\odmkey` непосредственно предшествует theorem.
+Первый найденный контекст имеет расстояние `0`: definition лежит в semantic-блоке, который непосредственно предшествует theorem.
 
 ### 4. Окно с расстоянием в символах
 
@@ -375,19 +380,19 @@ RETURN matches, distance(semantic_block), count
 
 ```dsl
 CONTEXT semantic_block[<=4]
-FOR term: semantic_block[text ~= /Степень!слова/],
+FOR term: definition[metadata.name = "степень"],
     th: semantic_block[metadata.kind = "theorem"]
 RETURN matches, distance(symbol), count
 ```
 
 Общий смысл:
 
-Найти короткое окно, где конкретный терминологический блок расположен рядом с theorem, и измерить расстояние между ними в символах.
+Найти короткое окно, где конкретное definition расположено рядом с theorem, и измерить расстояние между ними в символах.
 
 Пошагово:
 
 1. Строятся окна до 4 подряд идущих `semantic_block`.
-2. В окне ищется блок с `Степень!слова`.
+2. В окне ищется `definition` с `metadata.name = "степень"`.
 3. В том же окне ищется theorem.
 4. `RETURN distance(symbol)` добавляет расстояние между найденными selector-узлами в символах.
 

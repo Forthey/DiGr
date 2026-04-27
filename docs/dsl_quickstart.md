@@ -143,9 +143,16 @@ RETURN text, matches
 ### 4. Найти определения в `GA_1_2025.tex`
 
 ```dsl
-FIND semantic_block
-WHERE metadata.kind = "definition"
+FIND definition
 RETURN text, count
+```
+
+Поиск по названию определения:
+
+```dsl
+FIND definition
+WHERE metadata.name = "алфавитом"
+RETURN text, nodes, count
 ```
 
 ### 5. Найти все теоремы

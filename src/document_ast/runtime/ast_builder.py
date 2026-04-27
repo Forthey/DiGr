@@ -43,16 +43,18 @@ class AstBuilder:
         entity_config = self._config.get_entity(entity_name)
         children: list[AstNode] = []
         if entity_config.contains:
-            children = [
-                self.build_entity_node(entity_config.contains, child_segment)
-                for child_segment in self._segment_entity(
-                    entity_config.contains,
-                    segment.text,
-                    segment.start,
+            for child_entity in entity_config.contains:
+                children.extend(
+                    self.build_entity_node(child_entity, child_segment)
+                    for child_segment in self._segment_entity(
+                        child_entity,
+                        segment.text,
+                        segment.start,
+                    )
                 )
-            ]
-        else:
-            children = self._build_symbol_nodes(segment)
+
+        if self._should_build_symbols(entity_config):
+            children.extend(self._build_symbol_nodes(segment))
 
         return AstNode(
             entity=entity_name,
@@ -78,3 +80,9 @@ class AstBuilder:
             for index, char in enumerate(segment.text)
             if char not in self._excluded_symbols
         ]
+
+    @staticmethod
+    def _should_build_symbols(entity_config) -> bool:
+        if entity_config.symbols is not None:
+            return entity_config.symbols
+        return not entity_config.contains

@@ -39,7 +39,7 @@ def test_config_loader_parses_current_txt_config(config_dir: Path) -> None:
     assert config.format_name == "txt"
     assert config.format_config.root_entity == "page"
     assert config.format_config.symbols == {"exclude": []}
-    assert config.get_entity("sentence").contains == "clause"
+    assert config.get_entity("sentence").contains == ["clause"]
 
 
 def test_config_loader_parses_symbol_exclusions(workspace_tmp: Path) -> None:

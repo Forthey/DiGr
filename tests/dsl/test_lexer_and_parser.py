@@ -78,7 +78,7 @@ def test_dsl_parser_builds_find_query() -> None:
 def test_dsl_parser_builds_distance_query() -> None:
     source = """
     DISTANCE semantic_block[metadata.kind = "theorem"]
-    TO semantic_block[metadata.kind = "definition"]
+    TO semantic_block[metadata.kind = "example"]
     WITHIN content_scope[=1]
     LIMIT_PAIRS all_nearest
     RETURN pairs, stats, distance(word), count

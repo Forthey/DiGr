@@ -7,5 +7,6 @@ from typing import Any
 @dataclass(slots=True)
 class EntityConfig:
     name: str
-    contains: str | None
+    contains: list[str]
     segmenter: dict[str, Any]
+    symbols: bool | None = None

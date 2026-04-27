@@ -10,6 +10,7 @@
 - `subsection_scope`
 - `content_scope`
 - `semantic_block`
+- `definition`
 - `symbol`
 
 `content_scope` и `semantic_block` используют `metadata.kind`.
@@ -36,6 +37,9 @@
 
 Это позволяет искать смысловые блоки DSL-запросами, не делая полноценный синтаксический анализ TeX.
 
+`definition` выделяет inline-команды `\odmkey{...}{...}` внутри `semantic_block`.
+В `metadata.name` сохраняется первый аргумент, а в `metadata.index` второй аргумент.
+
 `symbol` создаётся автоматически под `semantic_block`.
 Он соответствует одному Unicode code point исходного TeX-текста и доступен для `FIND`, `CONTEXT` и `DISTANCE`, например через `distance(symbol)`.
 
@@ -61,12 +65,19 @@ document = ActorAstParser.from_config_dir("config/formats").parse(
 
 ## Как искать через DSL
 
-Найти все определения:
+Найти все определения/термины, размеченные `\odmkey`:
 
 ```dsl
-FIND semantic_block
-WHERE metadata.kind = "definition"
+FIND definition
 RETURN text, count
+```
+
+Найти определение по названию:
+
+```dsl
+FIND definition
+WHERE metadata.name = "алфавитом"
+RETURN text, nodes, count
 ```
 
 Найти все теоремы:
@@ -94,16 +105,16 @@ WHERE metadata.kind = "frame"
 RETURN text, count
 ```
 
-Найти смысловые блоки с `\odmkey`:
+Найти смысловые блоки, внутри которых есть определения:
 
 ```dsl
 FIND semantic_block
-WHERE text ~= /\\odmkey\{/ 
+WHERE has_child(definition)
 RETURN text, count
 ```
 
 ## Ограничения
 
 - `frame` не выделяется отдельной AST-сущностью; вместо этого используется `content_scope[metadata.kind = "frame"]`.
-- `\odmkey{...}{...}` остаётся inline-конструкцией внутри текста блока.
+- окружение `\begin{definition}...\end{definition}` остаётся отдельным видом `semantic_block` и в `GA_1_2025.tex` встречается редко; для терминологических определений используйте entity `definition`.
 - Разбор ориентирован на реальные конвенции `GA_1_2025.tex`; для произвольного TeX-документа правила могут потребовать отдельной настройки.

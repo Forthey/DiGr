@@ -45,7 +45,6 @@ def assert_compact_distance_pair(item: dict[str, Any]) -> None:
         ("proof", 65),
         ("example", 106),
         ("lemma", 7),
-        ("definition", 1),
     ],
 )
 def test_ga_tex_semantic_kind_counts(tex_engine, ga_tex_document, kind: str, expected_count: int) -> None:
@@ -58,23 +57,46 @@ def test_ga_tex_semantic_kind_counts(tex_engine, ga_tex_document, kind: str, exp
     assert payload["count"] == expected_count
 
 
-def test_docs_find_odmkey_blocks(tex_engine, ga_tex_document) -> None:
+def test_docs_find_definition_entities(tex_engine, ga_tex_document) -> None:
     payload = execute(
         tex_engine,
         ga_tex_document,
-        r"""
-        FIND semantic_block
-        WHERE text ~= /\\odmkey/
-        RETURN text, count
+        """
+        FIND definition
+        RETURN text, nodes, count
         """,
     )
 
-    assert payload["count"] == 154
+    assert payload["count"] == 325
     assert "\\odmkey" in payload["items"][0]["text"]
+    assert payload["items"][0]["nodes"]["entity"] == "definition"
+    assert payload["items"][0]["nodes"]["metadata"] == {
+        "name": "теории формальных грамматик",
+        "index": "Теория!формальных!грамматик",
+    }
+
+
+def test_docs_find_definition_by_name(tex_engine, ga_tex_document) -> None:
+    payload = execute(
+        tex_engine,
+        ga_tex_document,
+        """
+        FIND definition
+        WHERE metadata.name = "алфавитом"
+        RETURN text, nodes, count
+        """,
+    )
+
+    assert payload["count"] == 1
+    assert payload["items"][0]["text"] == "\\odmkey{алфавитом}{Алфавит}"
+    assert payload["items"][0]["nodes"]["metadata"] == {
+        "name": "алфавитом",
+        "index": "Алфавит",
+    }
 
 
 @pytest.mark.parametrize(
-    ("query", "expected_count", "expected_stats", "expected_unit", "expected_kinds"),
+    ("query", "expected_count", "expected_stats", "expected_unit", "expected_entities"),
     [
         (
             """
@@ -86,7 +108,7 @@ def test_docs_find_odmkey_blocks(tex_engine, ga_tex_document) -> None:
             35,
             {"count": 35, "mean": 0.0, "variance": 0.0, "min": 0, "max": 0},
             "semantic_block",
-            {"theorem", "proof"},
+            ["semantic_block", "semantic_block"],
         ),
         (
             """
@@ -98,11 +120,11 @@ def test_docs_find_odmkey_blocks(tex_engine, ga_tex_document) -> None:
             3,
             {"count": 3, "mean": 2 / 3, "variance": 2 / 9, "min": 0, "max": 1},
             "semantic_block",
-            {"theorem", "example"},
+            ["semantic_block", "semantic_block"],
         ),
         (
-            r"""
-            DISTANCE semantic_block[text ~= /\\odmkey/]
+            """
+            DISTANCE definition
             TO semantic_block[metadata.kind = "theorem"]
             LIMIT_PAIRS 3
             RETURN pairs, stats, distance(semantic_block), count
@@ -110,7 +132,7 @@ def test_docs_find_odmkey_blocks(tex_engine, ga_tex_document) -> None:
             3,
             {"count": 3, "mean": 0.0, "variance": 0.0, "min": 0, "max": 0},
             "semantic_block",
-            {"plain", "theorem"},
+            ["definition", "semantic_block"],
         ),
         (
             """
@@ -123,19 +145,19 @@ def test_docs_find_odmkey_blocks(tex_engine, ga_tex_document) -> None:
             35,
             {"count": 35, "mean": 0.0, "variance": 0.0, "min": 0, "max": 0},
             "semantic_block",
-            {"theorem", "proof"},
+            ["semantic_block", "semantic_block"],
         ),
         (
             """
-            DISTANCE semantic_block[text ~= /Степень!слова/]
+            DISTANCE definition[metadata.name = "степень"]
             TO semantic_block[metadata.kind = "theorem"]
             LIMIT_PAIRS all_nearest
             RETURN pairs, stats, distance(symbol), count
             """,
             1,
-            {"count": 1, "mean": 0.0, "variance": 0.0, "min": 0, "max": 0},
+            {"count": 1, "mean": 344.0, "variance": 0.0, "min": 344, "max": 344},
             "symbol",
-            {"plain", "theorem"},
+            ["definition", "semantic_block"],
         ),
     ],
 )
@@ -146,7 +168,7 @@ def test_docs_distance_examples(
         expected_count: int,
         expected_stats: dict[str, float | int],
         expected_unit: str,
-        expected_kinds: set[str],
+        expected_entities: list[str],
 ) -> None:
     payload = execute(tex_engine, ga_tex_document, query)
 
@@ -154,7 +176,7 @@ def test_docs_distance_examples(
     assert payload["count"] == expected_count
     assert payload["stats"] == pytest.approx(expected_stats)
     assert payload["items"][0]["distance"]["unit"] == expected_unit
-    assert {payload["items"][0]["left"]["metadata"]["kind"], payload["items"][0]["right"]["metadata"]["kind"]} == expected_kinds
+    assert [payload["items"][0]["left"]["entity"], payload["items"][0]["right"]["entity"]] == expected_entities
     assert_compact_distance_pair(payload["items"][0])
 
 
@@ -186,9 +208,9 @@ def test_docs_distance_examples(
             ["th", "ex"],
         ),
         (
-            r"""
+            """
             CONTEXT semantic_block[<=4]
-            FOR term: semantic_block[text ~= /\\odmkey/],
+            FOR term: definition,
                 th: semantic_block[metadata.kind = "theorem"]
             RETURN matches, distance(semantic_block), count
             """,
@@ -200,13 +222,13 @@ def test_docs_distance_examples(
         (
             """
             CONTEXT semantic_block[<=4]
-            FOR term: semantic_block[text ~= /Степень!слова/],
+            FOR term: definition[metadata.name = "степень"],
                 th: semantic_block[metadata.kind = "theorem"]
             RETURN matches, distance(symbol), count
             """,
             1,
             "symbol",
-            0,
+            344,
             ["term", "th"],
         ),
     ],

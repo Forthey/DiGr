@@ -33,7 +33,7 @@ def test_tex_dsl_finds_terms_theorems_and_frame_scopes(ga_tex_document) -> None:
 
     terms = engine.execute(
         ga_tex_document,
-        r'FIND semantic_block WHERE text ~= /\\odmkey/ RETURN count',
+        "FIND definition RETURN count",
     ).to_dict()
     theorems = engine.execute(
         ga_tex_document,
@@ -86,13 +86,13 @@ def test_tex_dsl_measures_distance_between_theorem_and_proof(ga_tex_document) ->
     assert payload["stats"]["count"] == payload["count"]
 
 
-def test_tex_dsl_measures_symbol_distance_between_semantic_blocks(ga_tex_document) -> None:
+def test_tex_dsl_measures_symbol_distance_between_definition_and_theorem(ga_tex_document) -> None:
     engine = ActorDslEngine()
 
     payload = engine.execute(
         ga_tex_document,
         """
-        DISTANCE semantic_block[text ~= /Степень!слова/]
+        DISTANCE definition[metadata.name = "степень"]
         TO semantic_block[metadata.kind = "theorem"]
         LIMIT_PAIRS all_nearest
         RETURN pairs, stats, distance(symbol), count
@@ -102,3 +102,4 @@ def test_tex_dsl_measures_symbol_distance_between_semantic_blocks(ga_tex_documen
     assert payload["type"] == "distance_query_execution_result"
     assert payload["count"] == 1
     assert payload["items"][0]["distance"]["unit"] == "symbol"
+    assert payload["items"][0]["distance"]["value"] == 344

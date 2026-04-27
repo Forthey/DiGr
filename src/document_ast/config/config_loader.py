@@ -60,15 +60,27 @@ class ConfigLoader:
     def _parse_entity(self, name: str, data: Any) -> EntityConfig:
         if not isinstance(data, dict):
             raise TypeError(f"Entity '{name}' must be a mapping")
-        contains = data.get("contains")
-        if contains is not None and (not isinstance(contains, str) or not contains):
+        contains_raw = data.get("contains")
+        if contains_raw is None:
+            contains: list[str] = []
+        elif isinstance(contains_raw, str) and contains_raw:
+            contains = [contains_raw]
+        elif (
+                isinstance(contains_raw, list)
+                and all(isinstance(item, str) and item for item in contains_raw)
+        ):
+            contains = list(contains_raw)
+        else:
             raise ValueError(f"Entity '{name}' has invalid 'contains'")
         segmenter = data.get("segmenter")
         if not isinstance(segmenter, dict):
             raise ValueError(f"Entity '{name}' must define 'segmenter' mapping")
         if "kind" not in segmenter or not isinstance(segmenter["kind"], str):
             raise ValueError(f"Entity '{name}' segmenter must define string 'kind'")
-        return EntityConfig(name=name, contains=contains, segmenter=segmenter)
+        symbols = data.get("symbols")
+        if symbols is not None and not isinstance(symbols, bool):
+            raise ValueError(f"Entity '{name}' symbols must be a boolean")
+        return EntityConfig(name=name, contains=contains, segmenter=segmenter, symbols=symbols)
 
     def _validate_relationships(
             self,
@@ -89,10 +101,11 @@ class ConfigLoader:
             )
 
         for entity in entities.values():
-            if entity.contains and entity.contains not in entities:
-                raise ValueError(
-                    f"Entity '{entity.name}' references unknown child '{entity.contains}'"
-                )
+            for child in entity.contains:
+                if child not in entities:
+                    raise ValueError(
+                        f"Entity '{entity.name}' references unknown child '{child}'"
+                    )
 
         self._validate_no_cycles(entities)
 
@@ -107,8 +120,7 @@ class ConfigLoader:
                 return
 
             active.add(name)
-            child = entities[name].contains
-            if child is not None:
+            for child in entities[name].contains:
                 walk(child)
             active.remove(name)
             visited.add(name)
