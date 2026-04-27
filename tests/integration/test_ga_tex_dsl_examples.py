@@ -250,6 +250,8 @@ def test_docs_context_distance_examples(
     assert payload["count"] == expected_count
     assert [match["name"] for match in first["matches"]] == expected_names
     assert distance["distance"] == {"unit": expected_unit, "value": expected_value}
+    assert "children" not in first["matches"][0]["nodes"][0]
+    assert "children" not in first["matches"][1]["nodes"][0]
     assert "children" not in distance["left"]["node"]
     assert "children" not in distance["right"]["node"]
 

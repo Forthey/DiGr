@@ -53,7 +53,7 @@ class PatternMatchResult:
         if self.matched_text is not None:
             result["matched_text"] = self.matched_text
         if self.nodes:
-            result["nodes"] = [node.to_dict() for node in self.nodes]
+            result["nodes"] = [render_compact_node(node) for node in self.nodes]
         return result
 
 
@@ -93,7 +93,7 @@ class ContextWindowMatch:
                 "base_entity": self.base_entity,
                 "span": _render_span(self.start, self.end),
                 "text": self.text,
-                "nodes": [node.to_dict() for node in self.nodes],
+                "nodes": [render_compact_node(node) for node in self.nodes],
             }
         if "text" in return_names:
             result["text"] = self.text

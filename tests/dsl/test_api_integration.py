@@ -90,6 +90,8 @@ def test_actor_dsl_engine_adds_distances_to_context_windows(dsl_engine, sample_d
 
     assert payload["count"] == 1
     assert payload["items"][0]["distances"][0]["distance"] == {"unit": "word", "value": 0}
+    assert "children" not in payload["items"][0]["matches"][0]["nodes"][0]
+    assert "children" not in payload["items"][0]["matches"][1]["nodes"][0]
     assert "children" not in payload["items"][0]["distances"][0]["left"]["node"]
     assert "children" not in payload["items"][0]["distances"][0]["right"]["node"]
 
