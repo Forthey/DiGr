@@ -1,0 +1,682 @@
+% Сборка: xelatex docs/dsl_full_report.tex (дважды для оглавления)
+% Требуются: XeLaTeX, polyglossia, fontspec, шрифты Times New Roman / Arial / Consolas
+% (поставляются с Windows). Для Linux/macOS можно заменить на DejaVu Serif/Sans/Mono.
+
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\newfontfamily\cyrillicfonttt{Consolas}
+
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue,
+  citecolor=blue,
+  pdftitle={DSL подсистема DiGr. Полный отчёт},
+  pdfauthor={Дрекалов Н.С., Соколов А.Н., Зеленов Н.М.}
+}
+
+\definecolor{dslkw}{RGB}{0,90,156}
+\definecolor{boxbg}{RGB}{245,245,250}
+
+\setlist[itemize]{leftmargin=1.6em,topsep=2pt,itemsep=2pt}
+\setlist[enumerate]{leftmargin=1.8em,topsep=2pt,itemsep=2pt}
+
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+\titlespacing*{\subsection}{0pt}{1.0em}{0.4em}
+\titlespacing*{\subsubsection}{0pt}{0.8em}{0.3em}
+
+\newcommand{\uml}[1]{\textit{См. диаграмму \texttt{docs/uml/#1}.}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{DSL подсистема DiGr.\\ Полный технический отчёт}
+\author{Дрекалов Н.\,С. \and Соколов А.\,Н. \and Зеленов Н.\,М.}
+\date{Апрель 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% =============================================================
+\section{Введение}
+
+\subsection{Контекст и постановка задачи}
+
+DiGr (Document Graph) есть инструментарий для построения и анализа AST
+произвольных текстовых документов: TeX, plain text, потенциально других
+форматов. Парсер документа конфигурируется YAML-файлами в
+\code{config/formats/} и строит дерево \code{AstDocument} из узлов
+\code{AstNode} (см. модуль \code{src/document\_ast/}).
+
+Над готовым AST требуется выполнять структурные запросы трёх классов:
+
+\begin{enumerate}
+  \item \textbf{FIND}: выбор узлов по типу сущности и предикату.
+  \item \textbf{CONTEXT}: поиск минимальных окон базовых единиц
+        текста, содержащих заданные паттерны.
+  \item \textbf{DISTANCE}: измерение расстояний между парами
+        узлов в выбранных единицах (символы или экземпляры заданной
+        сущности).
+\end{enumerate}
+
+Для решения этой задачи в проекте был спроектирован и реализован
+DSL (domain-specific language) с собственным синтаксисом, типобезопасным
+AST запроса и акторным конвейером исполнения. Настоящий отчёт
+последовательно описывает: что было реализовано, в каком порядке, как
+именно и зачем, а также демонстрирует работу системы на реальных
+запросах из \code{examples.md}.
+
+\uml{component\_overview.puml}
+
+\subsection{Структура отчёта}
+
+Отчёт разбит на четыре содержательные части:
+
+\begin{itemize}
+  \item раздел~2: хронология разработки с обоснованием
+        порядка реализации.
+  \item раздел~3: архитектура DSL и реализационные детали
+        каждого слоя.
+  \item раздел~4: акторный конвейер парсинга и исполнения.
+  \item раздел~5: четыре примера запросов из
+        \code{examples.md} вместе с фактическим выводом CLI на
+        документе \code{GA\_1\_2025.tex}.
+\end{itemize}
+
+% =============================================================
+\section{Что и в каком порядке было реализовано}
+
+\subsection{Хронология}
+
+Порядок реализации диктуется направлением зависимостей: сначала
+\code{actor}, на нём поднимается \code{document\_ast}, а уже на этой
+базе строится \code{dsl}. Никакой нижний слой не знает о вышестоящем.
+Хронологически работа шла так:
+
+\begin{enumerate}
+  \item \textbf{Actor framework} (\code{src/actor/}). Базовый runtime
+        с типизированными акторами (\code{Actor[State, QueueItem,
+        Message]}), драйвером \code{ProceedableActorDriver}, очередями
+        \code{Mailbox} и хэндлами \code{ActorHandle}. Без него нельзя
+        строить конвейеры с явными FSM-состояниями.
+        \uml{actor\_architecture.puml}
+  \item \textbf{Document AST} (\code{src/document\_ast/}). Модель
+        документа (\code{AstDocument}, \code{AstNode}) и акторный
+        парсер, использующий конфигурации форматов из
+        \code{config/formats/}. Сегментеры (\code{plain\_text},
+        \code{latex\_content\_scope}, \code{latex\_semantic\_block},
+        \code{latex\_definition}, \dots) задают, как разбивать текст
+        на узлы.
+  \item \textbf{DSL core} (\code{src/dsl/}). Модель запроса, лексер,
+        recursive-descent парсер, исполнитель. Реализован в едином
+        коммите после готовности фреймворка акторов и AST.
+  \item \textbf{Поддержка TeX-формата}: \code{config/formats/tex.yaml}
+        и набор LaTeX-сегментеров. Это позволило применять DSL к
+        реальным учебным TeX-документам.
+  \item \textbf{Запросы DISTANCE}: измерение расстояний между
+        парами узлов с поддержкой различных единиц измерения и
+        статистики по выборке.
+  \item \textbf{Сущность \code{definition}}: распознавание
+        именованных определений (макросов вида \code{\textbackslash odmkey})
+        как отдельных узлов AST.
+  \item \textbf{Фикс CONTEXT-запроса}: корректная обработка
+        вырожденных и минимальных окон.
+\end{enumerate}
+
+\subsection{Почему именно такой порядок}
+
+\begin{itemize}
+  \item \textbf{Снизу вверх по зависимостям.} Если бы DSL писался
+        раньше акторов, его пришлось бы переписывать под асинхронную
+        модель; начав с фреймворка акторов, авторы получили готовую
+        абстракцию для конвейеров.
+  \item \textbf{Сначала общий каркас, потом форматы.} TeX-конфиг
+        написан после ядра DSL, потому что DSL не должен ничего знать
+        о конкретных форматах: он работает с уже построенным
+        \code{AstDocument}.
+  \item \textbf{Запросы поэтапно.} Сначала \code{FIND} как минимальный
+        полезный запрос, затем \code{CONTEXT} как развитие идеи окна,
+        затем \code{DISTANCE} как самостоятельный аналитический
+        примитив. Каждый шаг расширяет грамматику и исполнитель, но
+        не ломает старое.
+\end{itemize}
+
+% =============================================================
+\section{Архитектура и реализация}
+
+\subsection{Слои подсистемы}
+
+В \code{src/dsl/} выделены шесть семантических слоёв:
+
+\begin{itemize}
+  \item \code{api/}: публичный фасад \code{ActorDslEngine}
+        (\code{api/engine.py}), \code{ActorDslParser}, \code{ActorDslExecutor}.
+  \item \code{model/}: типобезопасный AST запроса
+        (\code{model/query\_ast.py}).
+  \item \code{parsing/}: лексер, токены, recursive-descent
+        парсер, типизированные ошибки.
+  \item \code{execution/}: индекс документа, вычислитель
+        предикатов, калькулятор расстояний, валидатор запроса,
+        структуры результата.
+  \item \code{actors/parsing/}: акторы конвейера разбора.
+  \item \code{actors/execution/}: акторы конвейера исполнения.
+\end{itemize}
+
+\uml{dsl\_architecture.puml}
+
+\subsection{Модель запроса (AST)}
+
+Файл: \code{src/dsl/model/query\_ast.py}.
+
+Корневой sum-тип:
+\[
+\code{DslQuery} = \code{ContextQuery}\ |\ \code{FindQuery}\ |\ \code{DistanceQuery}.
+\]
+
+Sum-тип для предикатов \code{WHERE}:
+\[
+\code{Expression} = \code{ComparisonExpression}\ |\ \code{FunctionExpression}
+\ |\ \code{NotExpression}\ |\ \code{BinaryExpression}.
+\]
+
+Вспомогательные узлы: \code{Selector}, \code{Pattern}, \code{SpanSpec},
+\code{WithinConstraint}, \code{FieldRef}, \code{CountConstraint},
+\code{RegexLiteral}, \code{DistanceReturn}, \code{PairLimit}. Все они
+наследуют миксин \code{Serializable} и поддерживают \code{to\_dict()}.
+
+\textbf{Зачем такая модель:}
+
+\begin{itemize}
+  \item Дата-классы вместо словарей дают типобезопасность и
+        автодополнение в IDE.
+  \item Сериализация через \code{to\_dict()} нужна для логирования,
+        отладки и тестов золотых снимков.
+  \item Sum-типы делают разбор ветвлений в исполнителе исчерпывающим:
+        пропуск варианта виден на этапе ревью.
+\end{itemize}
+
+\subsection{Парсинг: лексер и recursive descent}
+
+\subsubsection{Лексер}
+
+Файл: \code{src/dsl/parsing/lexer.py}. Класс \code{DslLexer} разбивает
+текст на токены \code{DslToken(kind, value, position, line, column)}.
+Виды токенов перечислены в \code{token\_kind.py}:
+
+\begin{itemize}
+  \item ключевые слова: \code{CONTEXT}, \code{FIND}, \code{DISTANCE},
+        \code{FOR}, \code{TO}, \code{WITHIN}, \code{LIMIT\_PAIRS},
+        \code{WHERE}, \code{RETURN}, \code{AND}, \code{OR}, \code{NOT};
+  \item операторы сравнения: \code{\textasciitilde =},
+        \code{!\textasciitilde =}, \code{=}, \code{!=}, \code{<},
+        \code{>}, \code{<=}, \code{>=};
+  \item литералы: идентификаторы, строки в двойных кавычках,
+        regex-литералы, целые числа;
+  \item пунктуация: скобки, запятые, точки.
+\end{itemize}
+
+\subsubsection{Парсер}
+
+Файл: \code{src/dsl/parsing/recursive\_descent\_parser.py}. Класс
+\code{DslTokenStreamParser} реализован методом рекурсивного спуска.
+Грамматика небольшая, нет леворекурсивных правил, поэтому recursive
+descent уместен и легко поддерживается.
+
+Приоритеты булевых операций в \code{WHERE}:
+\code{NOT} > \code{AND} > \code{OR}. Селекторы парсятся в
+\code{Selector(entity, predicate)}, вызовы функций в
+\code{FunctionExpression(name, args)}.
+
+Ошибки агрегируются в \code{DslSyntaxError(message, offset, line,
+column)}, благодаря чему пользователь видит точную позицию в исходнике.
+
+\uml{dsl\_parser\_sequence.puml}
+
+\subsubsection{Почему recursive descent}
+
+\begin{itemize}
+  \item Грамматика DSL компактна и не требует генератора парсеров.
+  \item Ручной парсер легко расширять (как и было сделано при
+        добавлении \code{DISTANCE}).
+  \item Сообщения об ошибках формируются под конкретное место,
+        а UX в итоге лучше, чем у автогенерированного парсера.
+\end{itemize}
+
+\subsection{Исполнение запроса}
+
+\subsubsection{DocumentIndex}
+
+Файл: \code{src/dsl/execution/document\_index.py}. Создаётся один раз
+на документ. При построении проходит AST и индексирует:
+
+\begin{itemize}
+  \item все узлы по типу сущности (\code{nodes\_of\_entity});
+  \item отношения parent/child (для быстрого \code{children},
+        \code{descendants}, \code{ancestors});
+  \item диапазоны узлов внутри произвольного спана
+        (\code{nodes\_within\_span}, \code{container\_nodes\_for\_span});
+  \item соседей по позиции (\code{previous\_node}, \code{next\_node}).
+\end{itemize}
+
+Сложность построения \(O(n)\), где \(n\) есть количество узлов; запросы
+по типу сущности выполняются за \(O(1)\) с амортизацией.
+
+\subsubsection{PredicateEvaluator}
+
+Файл: \code{src/dsl/execution/predicate\_evaluator.py}. Вычисляет
+\code{WHERE} над текущим узлом. Поддерживает:
+
+\begin{itemize}
+  \item операторы сравнения над полями метаданных и спанов;
+  \item regex-сопоставление через \code{\textasciitilde =} и
+        \code{!\textasciitilde =};
+  \item встроенные функции: \code{has\_child}, \code{has\_descendant},
+        \code{has\_ancestor}, \code{contains}, \code{follows},
+        \code{precedes}, \code{intersects}, \code{inside};
+  \item сопоставление паттернов внутри текстовых окон.
+\end{itemize}
+
+\subsubsection{DistanceCalculator}
+
+Файл: \code{src/dsl/execution/distance\_calculator.py}. Генерирует пары
+узлов по двум селекторам, отбрасывает пары, не удовлетворяющие
+ограничениям, и считает расстояние:
+
+\begin{itemize}
+  \item \code{distance(symbol)}: разница позиций в символах
+        между ближайшими краями спанов;
+  \item \code{distance(<entity>)}: количество узлов указанной
+        сущности, лежащих между парой (используется бинпоиск
+        \code{bisect\_left} по отсортированным позициям, что даёт
+        \(O(\log n)\) на пару);
+  \item кэш диапазонов по типам сущностей переиспользуется между
+        парами одной выборки.
+\end{itemize}
+
+\subsubsection{QueryValidator и структуры результата}
+
+\code{QueryValidator} перед запуском проверяет, что все упомянутые в
+запросе сущности есть в документе. Тогда ошибка вылезает заранее,
+а не в середине обхода.
+
+Файл: \code{src/dsl/execution/query\_results.py} определяет:
+
+\begin{itemize}
+  \item \code{FindMatch}, \code{ContextWindowMatch},
+        \code{DistancePairMatch}: элементы выборки;
+  \item \code{FindQueryExecutionResult},
+        \code{ContextQueryExecutionResult},
+        \code{DistanceQueryExecutionResult}: обёртки с полями
+        \code{count}, \code{returns}, \code{items} и опциональным
+        \code{stats};
+  \item \code{PatternMatchResult}: результат сопоставления
+        паттерна внутри окна.
+\end{itemize}
+
+\uml{dsl\_executor\_sequence.puml}
+
+% =============================================================
+\section{Акторный конвейер}
+
+\subsection{Общая схема}
+
+И парсинг, и исполнение организованы единообразно: координатор
+раздаёт работу воркерам, сборщик аккумулирует результат. Логическая
+цепочка такова: \code{Coordinator}, далее \code{Workers}~$1{\dots}N$,
+далее \code{Collector}.
+
+Каждый актор имеет явный FSM, отражающий доменные фазы, а не общие
+\code{idle/working}. Это упрощает диагностику и тестирование.
+
+\uml{actor\_architecture.puml}
+
+\subsection{Конвейер парсинга}
+
+Файлы: \code{src/dsl/actors/parsing/}.
+
+\begin{itemize}
+  \item \code{DslLexerActor}: оборачивает \code{DslLexer},
+        принимает \code{TokenizeDslRequest}, возвращает поток токенов.
+  \item \code{DslQueryParserActor}: оборачивает
+        \code{DslTokenStreamParser}; FSM проходит фазы
+        \code{CLASSIFYING\_QUERY}, \code{PARSING\_FIND\_TARGET},
+        \code{PARSING\_FIND\_CONSTRAINTS}, \code{PARSING\_CONTEXT\_SPAN},
+        \code{PARSING\_CONTEXT\_PATTERNS},
+        \code{PARSING\_CONTEXT\_CONSTRAINTS}.
+  \item \code{DslParserCoordinatorActor}: оркеструет цепочку
+        лексер, парсер, сборщик; FSM проходит состояния
+        \code{IDLE}, \code{WAITING\_FOR\_TOKENS},
+        \code{WAITING\_FOR\_QUERY\_AST}, \code{COMPLETED}.
+  \item \code{DslParseResultCollectorActor}: собирает финальный
+        AST либо ошибку.
+\end{itemize}
+
+\uml{dsl\_parser\_sequence.puml}
+
+\subsection{Конвейер исполнения}
+
+Файлы: \code{src/dsl/actors/execution/}.
+
+\begin{itemize}
+  \item \code{DslExecutionCoordinatorActor}: главный оркестратор;
+        FSM проходит состояния \code{IDLE},
+        \code{EVALUATING\_FIND\_CANDIDATES} либо
+        \code{EVALUATING\_CONTEXT\_WINDOWS}, \code{COMPLETED}.
+        Раздаёт работу N воркерам и аккумулирует ответы.
+  \item \code{DslExecutionWorkerActor}: вычисляет один кандидат
+        либо одно окно; для \code{DISTANCE} обсчитывает пары.
+  \item \code{DslExecutionResultCollectorActor}: финальный
+        результат.
+\end{itemize}
+
+\uml{dsl\_executor\_sequence.puml}
+
+\subsection{Зачем акторы}
+
+\begin{itemize}
+  \item Параллельная обработка независимых кандидатов и пар без явной
+        работы с потоками.
+  \item Чёткое разделение ответственностей: координатор не считает,
+        воркер не маршрутизирует.
+  \item Доменные FSM-состояния служат живой документацией: по списку
+        состояний понятно, что вообще делает актор.
+\end{itemize}
+
+\uml{fanout\_sequence.puml}
+
+\subsection{End-to-end поток}
+
+Полный сквозной путь от пользовательского ввода до структурированного
+результата:
+
+\begin{enumerate}
+  \item текст запроса;
+  \item поток токенов после лексера;
+  \item Query AST после парсера;
+  \item DocumentIndex поверх AstDocument;
+  \item результат в виде JSON.
+\end{enumerate}
+
+\uml{dsl\_sequence.puml}\ \uml{tex\_dsl\_query\_sequence.puml}
+
+% =============================================================
+\section{Примеры запросов и фактический вывод}
+
+Все запросы взяты из \code{examples.md}. Запуск производится скриптом
+\code{run\_examples.py} над документом \code{GA\_1\_2025.tex} (учебный
+конспект на русском). Команда:
+
+\begin{Verbatim}[fontsize=\small,frame=single]
+PYTHONPATH=src python run_examples.py GA_1_2025.tex
+\end{Verbatim}
+
+Все четыре запроса завершились без ошибок. Ниже для каждого приведён
+текст запроса и фрагмент фактического вывода (полные выгрузки в
+\code{examples\_output.txt}).
+
+\subsection{Пример 1. FIND: определения о языках}
+
+\textbf{Запрос:}
+\begin{Verbatim}[fontsize=\small,frame=single,formatcom=\color{dslkw}]
+FIND definition
+WHERE metadata.index ~= "Язык"
+RETURN text, count
+\end{Verbatim}
+
+\textbf{Семантика:} выбрать все узлы сущности \code{definition},
+у которых метаданные содержат поле \code{index}, сопоставимое regex
+\code{Язык}; вернуть текст узла и общее количество.
+
+\textbf{Вывод} (фрагмент, всего \code{count = 19}):
+\begin{Verbatim}[fontsize=\scriptsize,frame=single]
+{
+  "type": "find_query_execution_result",
+  "count": 19,
+  "returns": ["text", "count"],
+  "items": [
+    { "text": "\\odmkey{языком}{Язык (language)}" },
+    { "text": "\\odmkey{Языком}{Язык!порождаемый грамматикой}" },
+    { "text": "\\odmkey{разрешимым}{Язык!разрешимый}" },
+    { "text": "\\odmkey{легко разрешимым}{Язык!легко разрешимый}" },
+    { "text": "\\odmkey{полуразрешимым}{Язык!полуразрешимый}" },
+    { "text": "\\odmkey{распознающим}{Язык!распознаваемый}" },
+    { "text": "\\odmkey{линейным}{Язык!линейный}" },
+    { "text": "\\odmkey{леволинейным}{Язык!леволинейный}" },
+    { "text": "\\odmkey{праволинейным}{Язык!праволинейный}" },
+    { "text": "\\odmkey{языки разметки}{Язык!разметки}" },
+    { "text": "\\odmkey{SGML}{Язык!разметки!SGML}" },
+    { "text": "\\odmkey{DTD}{Язык!разметки!DTD}" },
+    { "text": "\\odmkey{HTML}{Язык!разметки!HTML}" },
+    { "text": "\\odmkey{XML}{Язык!разметки!XML}" },
+    { "text": "\\odmkey{XML Schema}{Язык!разметки!XML Schema}" },
+    { "text": "\\odmkey{элементарным}{Язык!элементарный}" },
+    { "text": "\\odmkey{регулярным}{Язык!регулярный}" },
+    { "text": "\\odmkey{языка Дика}{Язык!Дика}" }
+  ]
+}
+\end{Verbatim}
+
+\subsection{Пример 2. DISTANCE между определениями (в символах)}
+
+\textbf{Запрос:}
+\begin{Verbatim}[fontsize=\small,frame=single,formatcom=\color{dslkw}]
+DISTANCE definition [metadata.index ~= "Язык"]
+TO       definition [metadata.index ~= "Язык"]
+LIMIT_PAIRS all
+RETURN pairs, stats, distance(symbol), count
+\end{Verbatim}
+
+\textbf{Семантика:} построить все пары определений со словом «Язык»
+в индексе и измерить расстояние между ними в символах текста.
+Вернуть список пар, агрегированную статистику и количество.
+
+\textbf{Вывод} (фрагмент, всего 171 пара):
+\begin{Verbatim}[fontsize=\scriptsize,frame=single]
+{
+  "type": "distance_query_execution_result",
+  "count": 171,
+  "returns": ["pairs", "stats", "distance(symbol)", "count"],
+  "items": [
+    {
+      "left":  { "entity": "definition",
+                 "text": "\\odmkey{леволинейным}{Язык!леволинейный}",
+                 "start": 56900, "end": 56940 },
+      "right": { "entity": "definition",
+                 "text": "\\odmkey{праволинейным}{Язык!праволинейный}",
+                 "start": 56945, "end": 56987 },
+      "span":  { "start": 56900, "end": 56987 },
+      "distance": { "unit": "symbol", "value": 5 }
+    },
+    ...
+  ],
+  "stats": {
+    "count": 171,
+    "mean": 35277.4,
+    "variance": 7.75e8,
+    "min": 5,
+    "max": 136374
+  }
+}
+\end{Verbatim}
+
+\textbf{Интерпретация:} ближайшая пара отстоит на 5 символов
+(соседние определения в одной строке), самая далёкая на 136 тысяч
+символов; среднее расстояние около 35 тысяч символов.
+
+\subsection{Пример 3. DISTANCE между определениями (в определениях)}
+
+\textbf{Запрос:}
+\begin{Verbatim}[fontsize=\small,frame=single,formatcom=\color{dslkw}]
+DISTANCE definition [metadata.index ~= "Язык"]
+TO       definition [metadata.index ~= "Язык"]
+LIMIT_PAIRS all
+RETURN pairs, stats, distance(definition), count
+\end{Verbatim}
+
+\textbf{Семантика:} те же пары, но единица измерения иная: количество
+\code{definition}-узлов, лежащих строго между членами пары. Это даёт
+структурную, а не текстовую дистанцию.
+
+\textbf{Вывод} (фрагмент):
+\begin{Verbatim}[fontsize=\scriptsize,frame=single]
+{
+  "type": "distance_query_execution_result",
+  "count": 171,
+  "returns": ["pairs", "stats", "distance(definition)", "count"],
+  "items": [
+    {
+      "left":  { "entity": "definition",
+                 "text": "\\odmkey{разрешимым}{Язык!разрешимый}",
+                 "start": 42983, "end": 43019 },
+      "right": { "entity": "definition",
+                 "text": "\\odmkey{легко разрешимым}{Язык!легко разрешимый}",
+                 "start": 43396, "end": 43444 },
+      "span":  { "start": 42983, "end": 43444 },
+      "distance": { "unit": "definition", "value": 0 }
+    },
+    ...
+  ],
+  "stats": {
+    "count": 171,
+    "mean": 35.0,
+    "variance": 719.7,
+    "min": 0,
+    "max": 132
+  }
+}
+\end{Verbatim}
+
+\textbf{Интерпретация:} часть пар стоит подряд (между ними нет других
+определений, distance = 0), максимум есть 132 промежуточных
+определения; среднее около 35.
+
+\subsection{Пример 4. DISTANCE: определение и теорема}
+
+\textbf{Запрос:}
+\begin{Verbatim}[fontsize=\small,frame=single,formatcom=\color{dslkw}]
+DISTANCE definition    [metadata.index ~= "Язык"]
+TO       semantic_block [metadata.kind = "theorem"]
+LIMIT_PAIRS all
+RETURN pairs, stats, distance(symbol), count
+\end{Verbatim}
+
+\textbf{Семантика:} измерить расстояние между каждым определением о
+языке и каждой теоремой документа. Полезно для оценки, как близко
+формальные утверждения стоят к вводимым понятиям.
+
+\textbf{Вывод} (фрагмент, всего 798 пар):
+\begin{Verbatim}[fontsize=\scriptsize,frame=single]
+{
+  "type": "distance_query_execution_result",
+  "count": 798,
+  "returns": ["pairs", "stats", "distance(symbol)", "count"],
+  "items": [
+    {
+      "left":  { "entity": "definition",
+                 "text": "\\odmkey{распознающим}{Язык!распознаваемый}",
+                 "start": 43686, "end": 43728 },
+      "right": { "entity": "semantic_block",
+                 "text": "\\begin{theorem} Язык ... \\end{theorem}",
+                 "start": 43732, "end": 43889 },
+      "span":  { "start": 43686, "end": 43889 },
+      "distance": { "unit": "symbol", "value": 1 }
+    },
+    ...
+  ],
+  "stats": {
+    "count": 798,
+    "mean": 89318.2,
+    "variance": 3.88e9,
+    "min": 1,
+    "max": 268827
+  }
+}
+\end{Verbatim}
+
+\textbf{Интерпретация:} некоторые теоремы стоят буквально вплотную
+к определениям (1 символ), но среднее расстояние велико (около
+89 тысяч символов), поскольку каждый из 19 определений породил пару
+с каждой теоремой документа (798 пар).
+
+% =============================================================
+\section{Заключение}
+
+\subsection{Итоги}
+
+\begin{itemize}
+  \item Реализован декларативный язык запросов над AST документа с
+        тремя типами запросов (\code{FIND}, \code{CONTEXT},
+        \code{DISTANCE}) и богатыми \code{WHERE}- и
+        \code{RETURN}-спецификациями.
+  \item Архитектура построена строго снизу вверх: actor framework,
+        затем document AST, затем DSL. Это исключает обратные
+        зависимости и упрощает тестирование.
+  \item Recursive-descent парсер и типобезопасный AST упростили
+        добавление новых конструкций (как было с \code{DISTANCE}).
+  \item Акторный конвейер с явными FSM делает поведение системы
+        предсказуемым и допускает параллельную обработку независимых
+        кандидатов.
+  \item Все четыре примера из \code{examples.md} успешно отрабатывают
+        на \code{GA\_1\_2025.tex}: 19 определений со словом «Язык»,
+        171 пара определений (с двумя единицами измерения), 798 пар
+        вида «определение, теорема».
+\end{itemize}
+
+\subsection{Возможные направления развития}
+
+\begin{itemize}
+  \item Поддержка дополнительных встроенных функций в \code{WHERE}
+        (например, \code{count\_within}, \code{depth}).
+  \item Кэширование DocumentIndex между запросами в интерактивном
+        режиме CLI.
+  \item Параллельный запуск конвейера исполнения с реальным пулом
+        потоков (сейчас драйвер пошаговый).
+  \item Расширение набора форматов (Markdown, XML) через новые
+        конфиги в \code{config/formats/}.
+\end{itemize}
+
+\subsection{Указатель UML-диаграмм}
+
+Все файлы лежат в \code{docs/uml/}:
+
+\begin{itemize}
+  \item \code{component\_overview.puml}: общая компонентная
+        диаграмма системы.
+  \item \code{dsl\_architecture.puml}: классы и слои DSL.
+  \item \code{dsl\_parser\_sequence.puml}: последовательность
+        разбора запроса.
+  \item \code{dsl\_executor\_sequence.puml}: последовательность
+        исполнения запроса.
+  \item \code{dsl\_sequence.puml}: end-to-end поток от текста
+        запроса до результата.
+  \item \code{actor\_architecture.puml}: устройство акторного
+        фреймворка.
+  \item \code{fanout\_sequence.puml}: fan-out от координатора
+        к воркерам.
+  \item \code{tex\_dsl\_query\_sequence.puml}: конкретный
+        сценарий на TeX-документе.
+  \item \code{tex\_pipeline\_overview.puml},
+        \code{tex\_parsing\_sequence.puml},
+        \code{tex\_ast\_model.puml}: TeX-специфичная часть
+        пайплайна.
+  \item \code{ast\_parser\_architecture.puml},
+        \code{ast\_parser\_sequence.puml}: акторный парсер
+        документа.
+\end{itemize}
+
+\end{document}
