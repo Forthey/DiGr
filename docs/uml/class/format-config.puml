@@ -1,0 +1,52 @@
+@startuml
+title Class diagram: конфигурация форматов AST-парсера
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+class ConfigLoader {
+  +load(path, expected_format_name?): ParserConfig
+  -_load_yaml(path): dict
+  -_parse_format(data): FormatConfig
+  -_parse_entity(name, data): EntityConfig
+  -_validate_relationships(...)
+  -_validate_no_cycles(entities)
+}
+
+class ParserConfig <<dataclass>> {
+  +format_config: FormatConfig
+  +entities: dict<str, EntityConfig>
+  +format_name: str
+  +get_entity(name): EntityConfig
+}
+
+class FormatConfig <<dataclass>> {
+  +name: str
+  +reader: dict
+  +root_entity: str
+  +symbols: dict
+}
+
+class EntityConfig <<dataclass>> {
+  +name: str
+  +contains: list<str>
+  +segmenter: dict
+  +symbols: bool?
+}
+
+ConfigLoader ..> ParserConfig : <<creates>>
+ConfigLoader ..> FormatConfig : <<creates>>
+ConfigLoader ..> EntityConfig : <<creates>>
+
+ParserConfig *-- "1" FormatConfig
+ParserConfig *-- "*" EntityConfig : entities (by name)
+
+note bottom
+  Источник: src/document_ast/config/*.
+  Описывает только статическую структуру конфигурации;
+  загружается из YAML, см. sequence/config-loading.puml.
+end note
+
+@enduml

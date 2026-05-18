@@ -1,0 +1,55 @@
+@startuml
+title Activity: DistanceCalculator.calculate_pairs
+
+skinparam shadowing false
+
+start
+
+:select left_nodes\n(index.nodes_of_entity ∘ matches_selector);
+:select right_nodes;
+
+:pairs := [], seen := empty;
+
+repeat
+  :выбрать (left, right) из произведения;
+  if (id совпали ИЛИ span'ы пересекаются?) then (да)
+    :skip;
+  else (нет)
+    :first, second := ordered_pair(left, right);
+    if (pair_key уже в seen?) then (да)
+      :skip;
+    else (нет)
+      if (within-ограничения выполнены?) then (да)
+        :distance := count_between(first, second, unit_entity);
+        :pairs.append(...);
+      else (нет)
+        :skip;
+      endif
+    endif
+  endif
+repeat while (есть нерассмотренные пары?) is (да)
+->нет;
+
+:sort pairs по (distance, left.start, right.start, entity);
+
+if (limit.mode) then
+  if (all) then
+    :return pairs;
+  elseif (all_nearest) then
+    :return pairs где distance == pairs[0].distance;
+  elseif (k) then
+    :return pairs[:k];
+  else (default)
+    :return pairs[:1];
+  endif
+endif
+
+stop
+
+note right
+  Источник: src/dsl/execution/distance_calculator.py.
+  count_between использует bisect_left по
+  отсортированным start'ам узлов unit_entity.
+end note
+
+@enduml

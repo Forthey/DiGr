@@ -1,0 +1,67 @@
+@startuml
+title Object diagram: фрагмент AstDocument для GA_1_2025.tex
+
+skinparam shadowing false
+skinparam objectAttributeIconSize 0
+hide empty members
+
+object "doc:AstDocument" as DOC {
+  source_path = "GA_1_2025.tex"
+  format_name = "tex"
+  root_entity = "section"
+}
+
+object "section1:AstNode" as S1 {
+  entity = "section"
+  start = 0
+  end = 4820
+  text = "\\section{Векторы}…"
+}
+
+object "sub1:AstNode" as SUB1 {
+  entity = "subsection_scope"
+  start = 124
+  end = 1502
+  text = "\\subsection{Линейная зависимость}…"
+}
+
+object "content1:AstNode" as C1 {
+  entity = "content_scope"
+  start = 178
+  end = 1480
+}
+
+object "block1:AstNode" as B1 {
+  entity = "semantic_block"
+  start = 178
+  end = 612
+  metadata = {"kind": "definition"}
+}
+
+object "def1:AstNode" as D1 {
+  entity = "definition"
+  start = 196
+  end = 590
+  text = "Векторы a, b, c называются линейно зависимыми, …"
+}
+
+object "block2:AstNode" as B2 {
+  entity = "semantic_block"
+  start = 620
+  end = 1480
+  metadata = {"kind": "theorem"}
+}
+
+DOC --> S1 : root
+S1 --> SUB1 : children[0]
+SUB1 --> C1 : children[0]
+C1 --> B1 : children[0]
+C1 --> B2 : children[1]
+B1 --> D1 : children[0]
+
+note bottom
+  Пример снимка инстансов после парсинга GA_1_2025.tex.
+  Классы и связи — в class/ast-model.puml.
+end note
+
+@enduml

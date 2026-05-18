@@ -183,7 +183,7 @@ driver.drain()
 
 ## Полная UML-диаграмма
 
-Полный исходник class diagram лежит в [uml/actor_architecture.puml](/home/forthey/projects/DiGr/docs/uml/actor_architecture.puml).
+Полный исходник class diagram лежит в [uml/class/actor_architecture.puml](./uml/class/actor_architecture.puml).
 
 Ниже приведена та же диаграмма в виде PlantUML-кода. В самой диаграмме generic-параметры вынесены в `note`, а не записаны в имени класса. Это сделано специально: такой вариант устойчивее для рендеринга и формально чище, чем попытка кодировать шаблонные параметры прямо в идентификаторе класса.
 
@@ -422,5 +422,5 @@ end note
 
 - [Архитектура AST-парсера](./ast_parser_architecture.md)
 - [Конфигурация AST-парсера](./ast_parser_configuration.md)
-- [UML class diagram AST-парсера](./uml/ast_parser_architecture.puml)
-- [UML sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
+- [UML class diagram AST-парсера](./uml/class/ast_parser_architecture.puml)
+- [UML sequence diagram AST-парсера](./uml/sequence/ast_parser_sequence.puml)

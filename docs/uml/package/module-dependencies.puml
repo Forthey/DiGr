@@ -1,0 +1,83 @@
+@startuml
+title Package diagram: зависимости Python-пакетов
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+left to right direction
+
+package "actor" as actor {
+  package "actor.arch" as actor_arch
+  package "actor.arch.internal" as actor_arch_internal
+  package "actor.drivers" as actor_drivers
+  package "actor.handles" as actor_handles
+  package "actor.output" as actor_output
+}
+
+package "document_ast" as document_ast {
+  package "document_ast.api" as ast_api
+  package "document_ast.config" as ast_config
+  package "document_ast.model" as ast_model
+  package "document_ast.runtime" as ast_runtime
+  package "document_ast.runtime.actors" as ast_runtime_actors
+  package "document_ast.source" as ast_source
+  package "document_ast.segmentation" as ast_segmentation
+}
+
+package "dsl" as dsl {
+  package "dsl.api" as dsl_api
+  package "dsl.model" as dsl_model
+  package "dsl.parsing" as dsl_parsing
+  package "dsl.execution" as dsl_execution
+  package "dsl.actors.parsing" as dsl_actors_parsing
+  package "dsl.actors.execution" as dsl_actors_execution
+}
+
+package "main" as main_pkg
+
+' actor internal
+actor_arch ..> actor_arch_internal
+actor_drivers ..> actor_arch
+actor_handles ..> actor_output
+actor_arch ..> actor_handles
+actor_arch ..> actor_output
+
+' document_ast
+ast_api ..> ast_config
+ast_api ..> ast_runtime
+ast_api ..> ast_model
+ast_runtime ..> actor_arch
+ast_runtime ..> actor_drivers
+ast_runtime ..> ast_source
+ast_runtime ..> ast_segmentation
+ast_runtime ..> ast_model
+ast_runtime_actors ..> actor_arch
+ast_runtime_actors ..> ast_model
+ast_config ..> ast_config
+ast_source ..> ast_model
+ast_segmentation ..> ast_model
+
+' dsl
+dsl_api ..> dsl_parsing
+dsl_api ..> dsl_execution
+dsl_api ..> dsl_model
+dsl_parsing ..> dsl_model
+dsl_execution ..> dsl_model
+dsl_execution ..> ast_model
+dsl_actors_parsing ..> actor_arch
+dsl_actors_parsing ..> dsl_parsing
+dsl_actors_parsing ..> dsl_model
+dsl_actors_execution ..> actor_arch
+dsl_actors_execution ..> dsl_execution
+dsl_actors_execution ..> dsl_model
+
+' entry point
+main_pkg ..> ast_api
+main_pkg ..> dsl_api
+
+note bottom
+  Слои: actor ← document_ast ← dsl ← main.
+  Стрелки показывают только направления import между пакетами;
+  внутренние классы и сообщения — в class/ и sequence/.
+end note
+
+@enduml

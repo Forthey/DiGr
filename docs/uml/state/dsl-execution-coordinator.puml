@@ -1,0 +1,30 @@
+@startuml
+title FSM DslExecutionCoordinatorActor
+
+skinparam shadowing false
+
+[*] --> IDLE
+
+IDLE --> EVALUATING_FIND_CANDIDATES : ExecuteDslQueryRequest\n/ fan-out EvaluateFindCandidateRequest
+
+EVALUATING_FIND_CANDIDATES : ожидаем FindCandidateEvaluated\nот воркеров
+EVALUATING_FIND_CANDIDATES --> EVALUATING_FIND_CANDIDATES : FindCandidateEvaluated\n[остались незавершённые кандидаты]
+EVALUATING_FIND_CANDIDATES --> EVALUATING_CONTEXT_WINDOWS : все кандидаты обработаны\n/ fan-out EvaluateContextWindowRequest
+EVALUATING_FIND_CANDIDATES --> COMPLETED : нет context-блока\n/ DslQueryExecuted
+
+EVALUATING_CONTEXT_WINDOWS : ожидаем ContextWindowEvaluated
+EVALUATING_CONTEXT_WINDOWS --> EVALUATING_CONTEXT_WINDOWS : ContextWindowEvaluated\n[остались окна]
+EVALUATING_CONTEXT_WINDOWS --> COMPLETED : все окна обработаны\n/ DslQueryExecuted
+
+EVALUATING_FIND_CANDIDATES --> COMPLETED : DslExecutionFailed
+EVALUATING_CONTEXT_WINDOWS --> COMPLETED : DslExecutionFailed
+
+COMPLETED --> [*]
+
+note bottom
+  Источник: src/dsl/execution/states.py (DslExecutionCoordinatorState).
+  Find-фаза и Context-фаза разделены: пока не собраны все кандидаты,
+  окна не оцениваются.
+end note
+
+@enduml

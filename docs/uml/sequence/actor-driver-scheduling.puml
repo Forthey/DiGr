@@ -1,0 +1,56 @@
+@startuml
+title Sequence: один шаг планирования BaseActorDriver
+
+skinparam shadowing false
+
+participant "Producer" as P
+participant "actor:Actor" as A
+participant "mailbox:Mailbox" as MB
+participant "driver:BaseActorDriver" as D
+participant "ready:ReadyActors" as R
+participant "worker thread\n(или async task)" as W
+
+P -> A : put(message)
+activate A
+A -> MB : put(message)
+A -> D : schedule(self)
+deactivate A
+
+activate D
+D -> R : schedule(actor)
+note right
+  если id(actor) уже в _scheduled →
+  возвращает false (no-op)
+end note
+deactivate D
+
+W -> D : _pop_ready_actor()
+activate D
+D -> R : pop()
+R --> D : actor (или None)
+D --> W : actor
+deactivate D
+
+W -> A : step(limit)
+activate A
+A -> MB : get_nowait()
+MB --> A : message
+A -> A : handle(message)
+deactivate A
+
+W -> D : _complete_actor(actor)
+activate D
+D -> R : complete(actor)
+R --> D : needs_reschedule
+alt needs_reschedule == true
+  D -> R : schedule(actor)
+end
+deactivate D
+
+note over P, W
+  Источник: src/actor/arch/base_actor_driver.py,
+  src/actor/arch/internal/ready_actors.py.
+  Состояния перехода — в state/ready-actors.puml.
+end note
+
+@enduml

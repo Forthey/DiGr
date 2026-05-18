@@ -1,0 +1,25 @@
+@startuml
+title FSM ParseCoordinatorActor (document_ast)
+
+skinparam shadowing false
+
+[*] --> IDLE
+
+IDLE --> WAITING_FOR_DOCUMENT : ParseDocumentRequest
+
+WAITING_FOR_DOCUMENT : отправлен ReadDocumentRequest\nReaderActor'у
+WAITING_FOR_DOCUMENT --> BUILDING_SUBTREES : DocumentLoaded\n/ fan-out BuildSubtreeRequest
+
+BUILDING_SUBTREES : окно открыто;\nждём SubtreeCompleted от воркеров
+BUILDING_SUBTREES --> BUILDING_SUBTREES : SubtreeCompleted\n[ещё есть незавершённые поддеревья]
+BUILDING_SUBTREES --> COMPLETED : SubtreeCompleted\n[все поддеревья готовы]
+
+COMPLETED --> [*]
+
+note bottom
+  Источник: src/document_ast/runtime/states.py (CoordinatorState).
+  Диаграмма содержит только состояния и переходы координатора;
+  взаимодействие с воркерами — см. sequence/fanout_sequence.puml.
+end note
+
+@enduml

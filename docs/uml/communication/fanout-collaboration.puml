@@ -1,0 +1,29 @@
+@startuml
+title Communication diagram: fan-out при построении AST
+
+skinparam shadowing false
+
+object ":ParseCoordinatorActor" as Coord
+object ":SubtreeBuilderWorker_1" as W1
+object ":SubtreeBuilderWorker_2" as W2
+object ":SubtreeBuilderWorker_N" as WN
+object ":ParseResultCollectorActor" as Collector
+
+Coord --> W1 : 1: BuildSubtreeRequest(node_1)
+Coord --> W2 : 2: BuildSubtreeRequest(node_2)
+Coord --> WN : 3: BuildSubtreeRequest(node_N)
+
+W1 --> Coord : 1.1: SubtreeCompleted(node_1, subtree_1)
+W2 --> Coord : 2.1: SubtreeCompleted(node_2, subtree_2)
+WN --> Coord : 3.1: SubtreeCompleted(node_N, subtree_N)
+
+Coord --> Collector : 4: ParseCompleted(AstDocument)
+
+note right of Coord
+  Нумерация показывает партнёрство сообщений
+  (request / response), а не строгий временной
+  порядок — последовательность см.
+  sequence/fanout_sequence.puml.
+end note
+
+@enduml

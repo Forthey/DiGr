@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>DiGr DSL — Railroad diagram</title>
+<script src="https://cdn.jsdelivr.net/npm/railroad-diagrams@1.0.0/railroad.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/railroad-diagrams@1.0.0/railroad.css">
+<style>
+  body { font-family: -apple-system, Segoe UI, sans-serif; padding: 24px; }
+  h2 { margin-top: 32px; }
+  .railroad-row { margin: 12px 0 32px; }
+</style>
+</head>
+<body>
+<h1>DiGr DSL — Railroad diagram</h1>
+<p>
+  Сгенерировано из <a href="../../dsl_grammar.ebnf">docs/dsl_grammar.ebnf</a>
+  библиотекой <code>railroad-diagrams</code>. Открыть файл в браузере для
+  интерактивного просмотра; для статичного SVG см.
+  <code>dsl-grammar-railroad.md</code>.
+</p>
+
+<h2>query</h2>
+<div class="railroad-row" id="rr-query"></div>
+
+<h2>context_query</h2>
+<div class="railroad-row" id="rr-context"></div>
+
+<h2>find_query</h2>
+<div class="railroad-row" id="rr-find"></div>
+
+<h2>distance_query</h2>
+<div class="railroad-row" id="rr-distance"></div>
+
+<h2>boolean_expr</h2>
+<div class="railroad-row" id="rr-bool"></div>
+
+<h2>selector</h2>
+<div class="railroad-row" id="rr-selector"></div>
+
+<script>
+function render(id, diagram) {
+  diagram.addTo(document.getElementById(id));
+}
+const { Diagram, Choice, Sequence, Optional, ZeroOrMore, OneOrMore, Terminal, NonTerminal, Comment } = window;
+
+render("rr-query", Diagram(Choice(0,
+  NonTerminal("context_query"),
+  NonTerminal("find_query"),
+  NonTerminal("distance_query")
+)));
+
+render("rr-context", Diagram(
+  Terminal("CONTEXT"), NonTerminal("span_spec"),
+  Terminal("FOR"), NonTerminal("pattern_list"),
+  ZeroOrMore(NonTerminal("within_clause")),
+  Optional(NonTerminal("where_clause")),
+  Optional(NonTerminal("return_clause")),
+  Optional(Terminal(";"))
+));
+
+render("rr-find", Diagram(
+  Terminal("FIND"), NonTerminal("entity_name"),
+  Optional(NonTerminal("where_clause")),
+  ZeroOrMore(NonTerminal("within_clause")),
+  Optional(NonTerminal("return_clause")),
+  Optional(Terminal(";"))
+));
+
+render("rr-distance", Diagram(
+  Terminal("DISTANCE"), NonTerminal("selector"),
+  Terminal("TO"), NonTerminal("selector"),
+  ZeroOrMore(NonTerminal("within_clause")),
+  Optional(NonTerminal("limit_pairs_clause")),
+  NonTerminal("return_clause"),
+  Optional(Terminal(";"))
+));
+
+render("rr-bool", Diagram(
+  NonTerminal("conjunction"),
+  ZeroOrMore(Sequence(Terminal("OR"), NonTerminal("conjunction")))
+));
+
+render("rr-selector", Diagram(
+  NonTerminal("entity_name"),
+  Optional(Sequence(Terminal("["), NonTerminal("boolean_expr"), Terminal("]")))
+));
+</script>
+</body>
+</html>

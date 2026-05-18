@@ -45,17 +45,8 @@
 
 ## UML-диаграммы
 
-- [Class diagram actor runtime](./uml/actor_architecture.puml)
-- [Class diagram AST-парсера](./uml/ast_parser_architecture.puml)
-- [Sequence diagram AST-парсера](./uml/ast_parser_sequence.puml)
-- [Fan-out / Fan-in sequence diagram AST-парсера](./uml/fanout_sequence.puml)
-- [Class diagram DSL](./uml/dsl_architecture.puml)
-- [Sequence diagram DSL](./uml/dsl_sequence.puml)
-- [Компонентная диаграмма проекта](./uml/component_overview.puml)
-- [Презентационный overview: TeX -> AST -> DSL](./uml/tex_pipeline_overview.puml)
-- [Презентационная AST-модель формата tex](./uml/tex_ast_model.puml)
-- [Презентационный sequence: разбор GA_1_2025.tex](./uml/tex_parsing_sequence.puml)
-- [Презентационный sequence: DSL-поиск по TeX AST](./uml/tex_dsl_query_sequence.puml)
+Полный каталог UML-диаграмм с пояснениями и принципами формализации — в [docs/uml/README.md](./uml/README.md). Диаграммы разложены по подкаталогам соответственно типу:
+`class/`, `component/`, `sequence/`, `state/`, `activity/`, `object/`, `package/`, `deployment/`, `usecase/`, `communication/`, `timing/`, `grammar/`.
 
 ## Презентационный материал
 

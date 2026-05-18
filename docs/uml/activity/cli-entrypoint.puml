@@ -1,0 +1,40 @@
+@startuml
+title Activity: src/main.py — поток CLI
+
+skinparam shadowing false
+
+start
+
+:argparse: source, --config-dir, --format;
+:ActorAstParser.from_config_dir(config_dir);
+
+if (stdin и stdout — tty?) then (да, интерактивный режим)
+  :parser.parse(source, format_name);
+  :создать ActorDslEngine;
+  :печать метаданных документа;
+
+  repeat
+    :read_query_interactively();
+    if (EXIT / EOF?) then (да)
+      stop
+    else (нет)
+      if (пустой запрос?) then (да)
+        :"Пустой запрос пропущен";
+      else (нет)
+        :engine.execute(document, query);
+        if (исключение?) then (да)
+          :print(ERROR);
+        else (нет)
+          :print(json результата);
+        endif
+      endif
+    endif
+  repeat while (true)
+
+else (нет, batch-режим)
+  :parser.parse(source, format_name);
+  :print(document.to_dict() как JSON);
+  stop
+endif
+
+@enduml

@@ -1,0 +1,90 @@
+@startuml
+title Class diagram: семантика выполнения DSL
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+class DocumentIndex {
+  -_document: AstDocument
+  -_all_nodes
+  -_nodes_by_entity
+  -_parent_by_id
+  +entities(): set<str>
+  +nodes_of_entity(name): list<AstNode>
+  +children(node): list<AstNode>
+  +descendants(node): list<AstNode>
+  +ancestors(node): list<AstNode>
+}
+
+class PredicateEvaluator {
+  -_index: DocumentIndex
+  +evaluate(expr, node): bool
+  +matches_selector(node, selector): bool
+  +compare_count(actual, constraint): bool
+}
+
+class QueryValidator {
+  +validate(query, index)
+}
+
+class DistanceCalculator {
+  -_index: DocumentIndex
+  -_evaluator: PredicateEvaluator
+  -_range_cache
+  +distance_return(returns): DistanceReturn
+  +calculate_pairs(left, right, within, limit, unit): list<DistancePairMatch>
+  +count_between(first, second, unit): int
+  +within_constraints_satisfied(first, second, within): bool
+}
+
+class FindMatch <<dataclass>> {
+  +node: AstNode
+  +render(returns, source): dict
+}
+
+class ContextWindowMatch <<dataclass>> {
+  +base_entity: str
+  +nodes: list<AstNode>
+  +text: str
+  +start: int
+  +end: int
+}
+
+class PatternMatchResult <<dataclass>> {
+  +name: str
+  +source_type: str
+  +matched_text: str?
+  +nodes: list<AstNode>
+}
+
+class DistancePairMatch <<dataclass>> {
+  +left: AstNode
+  +right: AstNode
+  +distance: int
+  +unit: str
+}
+
+class FindQueryExecutionResult <<dataclass>>
+class ContextQueryExecutionResult <<dataclass>>
+class DistanceQueryExecutionResult <<dataclass>>
+
+PredicateEvaluator --> DocumentIndex
+DistanceCalculator --> DocumentIndex
+DistanceCalculator --> PredicateEvaluator
+DistanceCalculator ..> DistancePairMatch : <<creates>>
+
+ContextWindowMatch *-- "*" PatternMatchResult : matches
+
+FindQueryExecutionResult *-- "*" FindMatch
+ContextQueryExecutionResult *-- "*" ContextWindowMatch
+DistanceQueryExecutionResult *-- "*" DistancePairMatch
+
+note bottom
+  Источник: src/dsl/execution/{document_index,predicate_evaluator,query_validator,
+  query_results,distance_calculator}.py. Только семантические классы —
+  акторы и FSM см. в class/dsl_architecture.puml и state/.
+end note
+
+@enduml

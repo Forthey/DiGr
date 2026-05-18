@@ -1,0 +1,31 @@
+@startuml
+title Жизненный цикл шага Fsm.step(limit)
+
+skinparam shadowing false
+
+[*] --> Idle
+
+Idle : inbox пуст ИЛИ\nстеп ещё не начат
+Idle --> Handling : step(limit)\n[inbox.get_nowait() != None]
+
+Handling : подбирается обработчик\non_{state}_{message}
+Handling --> Idle : handler вернул новое state\n[limit > 0, inbox не пуст]
+Handling --> Idle : inbox опустошился ИЛИ\nдостигнут limit
+Handling --> Unhandled : нет on_{state}_{message}
+
+Unhandled : on_unhandled_message(msg)
+Unhandled --> Idle : default no-op
+Unhandled --> Terminated : exception
+
+Idle --> Terminated : актор закрыт
+Terminated --> [*]
+
+note right of Handling
+  Внутри Handling FSM может
+  оставаться в том же состоянии
+  или перейти в любое другое —
+  диаграмма абстрагирует конкретные
+  state-переходы пользовательских FSM.
+end note
+
+@enduml

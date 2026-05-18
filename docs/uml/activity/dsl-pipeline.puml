@@ -1,0 +1,60 @@
+@startuml
+title Activity: логический пайплайн DSL-запроса
+
+skinparam shadowing false
+
+start
+
+:source DSL-запрос;
+:lex → DslToken[]\n(Lexer);
+
+if (лексер успешен?) then (да)
+else (нет)
+  :LexicalError;
+  stop
+endif
+
+:parse → DslQuery (AST)\n(RecursiveDescentParser);
+
+if (парсинг успешен?) then (да)
+else (нет)
+  :ParseError;
+  stop
+endif
+
+:validate(DslQuery)\n(QueryValidator);
+
+if (запрос валиден?) then (да)
+else (нет)
+  :ValidationError;
+  stop
+endif
+
+:execute(DslQuery, AstDocument);
+
+fork
+  :оценить FIND-кандидатов\n(PredicateEvaluator);
+fork again
+  if (есть CONTEXT-блок?) then (да)
+    :оценить context-окна;
+  else (нет)
+    :skip;
+  endif
+end fork
+
+if (есть RETURN distance?) then (да)
+  :вычислить distance-пары\n(DistanceCalculator);
+else (нет)
+  :собрать FindMatch / ContextWindowMatch;
+endif
+
+:сформировать QueryResults;
+
+floating note right
+  Только логика. Конкретная разводка
+  на акторов и сообщения — в sequence/.
+end note
+
+stop
+
+@enduml

@@ -1,0 +1,45 @@
+@startuml
+title Deployment diagram: три execution environment'а
+
+skinparam shadowing false
+
+node "Python-процесс CLI" as proc {
+
+  artifact "main.py" as main_art
+
+  node "AsyncioActorDriver\n(event loop)" as async_env {
+    artifact "Coordinator actors" as a_coords
+    artifact "Worker actors (N)" as a_workers
+    artifact "Collector actors" as a_collectors
+  }
+
+  node "ThreadedActorDriver\n(thread pool)" as threaded_env {
+    artifact "Coordinator actors" as t_coords
+    artifact "Worker actors (N threads)" as t_workers
+    artifact "Collector actors" as t_collectors
+  }
+
+  node "ManualActorDriver\n(testing / step-by-step)" as manual_env {
+    artifact "Actors driven by\nproceed() / drain()" as m_actors
+  }
+}
+
+artifact "config/formats/*.yaml" as yaml_art
+artifact "input document\n(*.txt / *.tex / ...)" as input_art
+artifact "stdout (JSON)" as stdout_art
+
+main_art ..> async_env : выбирает driver
+main_art ..> threaded_env
+main_art ..> manual_env
+
+main_art --> yaml_art : reads
+main_art --> input_art : reads
+main_art --> stdout_art : writes
+
+note bottom
+  Все три environment'а реализуют один и тот же контракт ActorDriver
+  (см. class/actor-drivers.puml). Выбор конкретного драйвера задаёт способ
+  планирования акторов, но не их FSM-логику.
+end note
+
+@enduml

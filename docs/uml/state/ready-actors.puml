@@ -1,0 +1,32 @@
+@startuml
+title FSM записи актора в ReadyActors
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor White
+  BorderColor #333
+}
+
+[*] --> Scheduled : schedule(actor)\n[actor_id not in _scheduled]
+
+Scheduled : ожидает в deque _ready
+Scheduled --> Inflight : pop()
+
+Inflight : выполняется worker'ом\n(_inflight += 1)
+Inflight --> Scheduled : complete(actor)\n[actor.pending > 0]
+Inflight --> [*] : complete(actor)\n[actor.pending == 0]
+
+note bottom of Scheduled
+  schedule() возвращает false, если
+  актор уже в _scheduled — повторный
+  вход в Scheduled блокируется.
+end note
+
+note right
+  Диаграмма отражает один цикл актора
+  в планировщике BaseActorDriver.
+  Состояния — позиция актора в структуре
+  ReadyActors, не его внутренний FSM.
+end note
+
+@enduml

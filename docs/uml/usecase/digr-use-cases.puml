@@ -1,0 +1,48 @@
+@startuml
+title Use case diagram: DiGr
+
+skinparam shadowing false
+left to right direction
+
+actor "Пользователь CLI" as User
+actor "Автор YAML-формата" as FormatAuthor
+actor "Разработчик-расширитель" as Dev
+
+rectangle "DiGr" {
+  usecase "Распарсить документ\nв AstDocument" as UC_Parse
+  usecase "Выполнить DSL-запрос\nпо документу" as UC_Query
+  usecase "Запустить CLI\nв интерактивном режиме" as UC_Repl
+  usecase "Получить JSON-результат" as UC_Json
+
+  usecase "Добавить новый\nформат документа" as UC_AddFormat
+  usecase "Описать набор entity\nи их segmenter'ы" as UC_DescribeEntities
+
+  usecase "Добавить новую\nконструкцию DSL" as UC_ExtendDsl
+  usecase "Добавить новый\nActorDriver" as UC_AddDriver
+  usecase "Расширить набор\nfunction expressions" as UC_AddFn
+}
+
+User --> UC_Parse
+User --> UC_Query
+User --> UC_Repl
+User --> UC_Json
+
+UC_Repl ..> UC_Parse : <<include>>
+UC_Repl ..> UC_Query : <<include>>
+UC_Query ..> UC_Parse : <<include>>
+UC_Parse ..> UC_Json : <<include>>
+UC_Query ..> UC_Json : <<include>>
+
+FormatAuthor --> UC_AddFormat
+UC_AddFormat ..> UC_DescribeEntities : <<include>>
+
+Dev --> UC_ExtendDsl
+Dev --> UC_AddDriver
+Dev --> UC_AddFn
+
+note bottom
+  Use cases отражают внешнюю функциональность DiGr.
+  Внутренние подсистемы и компоненты — в component/.
+end note
+
+@enduml

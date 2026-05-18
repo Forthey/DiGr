@@ -1,0 +1,39 @@
+@startuml
+title Activity: построение AstDocument
+
+skinparam shadowing false
+
+start
+
+:загрузить FormatConfig\n(ConfigLoader);
+:resolve формата\nпо аргументу или расширению;
+:прочитать исходный текст\n(SourceReader);
+:создать SourceDocument;
+
+:сегментировать root entity\n(TextSegmenter);
+
+if (есть дочерние entities у root?) then (да)
+  fork
+    :сегментировать дочерние entity\n(подзадача 1);
+  fork again
+    :сегментировать дочерние entity\n(подзадача 2);
+  fork again
+    :сегментировать дочерние entity\n(подзадача N);
+  end fork
+  :собрать AstNode-дерево\nрекурсивно;
+else (нет)
+  :создать листовой AstNode;
+endif
+
+:обернуть корневой узел\nв AstDocument;
+
+stop
+
+note right
+  Источник: src/document_ast/runtime/ast_builder.py,
+  src/document_ast/segmentation/text_segmenter.py.
+  Это логический поток; конкретная разводка
+  на акторов — см. sequence/ast_parser_sequence.puml.
+end note
+
+@enduml

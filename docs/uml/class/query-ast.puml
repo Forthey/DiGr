@@ -1,0 +1,120 @@
+@startuml
+title Class diagram: модель DSL-запроса (query AST)
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+class Serializable <<mixin>> {
+  +to_dict(): dict
+}
+
+class RegexLiteral <<dataclass>> {
+  +pattern: str
+  +flags: str
+}
+
+class FieldRef <<dataclass>> {
+  +parts: list<str>
+  +path: str
+}
+
+class CountConstraint <<dataclass>> {
+  +operator: str
+  +value: int
+}
+
+class SpanSpec <<dataclass>> {
+  +entity_name: str
+}
+
+class WithinConstraint <<dataclass>> {
+  +entity_name: str
+}
+
+class Selector <<dataclass>> {
+  +entity_name: str
+}
+
+class Pattern <<dataclass>> {
+  +alias: str?
+}
+
+class DistanceReturn <<dataclass>> {
+  +entity_name: str
+}
+
+class PairLimit <<dataclass>> {
+  +mode: str
+  +value: int?
+}
+
+abstract class Expression <<sealed>>
+class ComparisonExpression {
+  +operator: str
+}
+class FunctionExpression {
+  +name: str
+}
+class NotExpression
+class BinaryExpression {
+  +operator: str
+}
+
+abstract class DslQuery <<sealed>>
+class FindQuery <<dataclass>> {
+  +entity_name: str
+}
+class ContextQuery <<dataclass>>
+class DistanceQuery <<dataclass>>
+
+Expression <|-- ComparisonExpression
+Expression <|-- FunctionExpression
+Expression <|-- NotExpression
+Expression <|-- BinaryExpression
+
+DslQuery <|-- FindQuery
+DslQuery <|-- ContextQuery
+DslQuery <|-- DistanceQuery
+
+SpanSpec *-- "1" CountConstraint
+WithinConstraint *-- "1" CountConstraint
+Selector o-- "0..1" Expression : predicate
+Pattern *-- "1" Pattern : source\n(str | RegexLiteral | Selector)
+
+ComparisonExpression *-- "1" FieldRef : left
+FunctionExpression o-- "*" Selector : arguments
+FunctionExpression o-- "*" FieldRef : arguments
+FunctionExpression o-- "*" SpanSpec : arguments
+NotExpression *-- "1" Expression : operand
+BinaryExpression *-- "2" Expression
+
+FindQuery o-- "0..1" Expression : where
+FindQuery o-- "*" WithinConstraint
+ContextQuery *-- "1" SpanSpec : span
+ContextQuery *-- "*" Pattern : patterns
+ContextQuery o-- "*" WithinConstraint
+ContextQuery o-- "0..1" Expression : where
+DistanceQuery *-- "2" Selector : left, right
+DistanceQuery *-- "*" WithinConstraint
+DistanceQuery *-- "1" PairLimit
+DistanceQuery o-- "*" DistanceReturn : returns
+
+Serializable <|.. RegexLiteral
+Serializable <|.. FieldRef
+Serializable <|.. CountConstraint
+Serializable <|.. SpanSpec
+Serializable <|.. WithinConstraint
+Serializable <|.. Selector
+Serializable <|.. Pattern
+Serializable <|.. DistanceReturn
+Serializable <|.. PairLimit
+
+note bottom
+  Источник: src/dsl/model/query_ast.py.
+  Чистая модель AST DSL без executor-классов.
+  Семантические классы — в class/dsl-execution-semantics.puml.
+end note
+
+@enduml

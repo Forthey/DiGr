@@ -1,0 +1,53 @@
+@startuml
+title Timing diagram: cooperative scheduling трёх акторов
+
+skinparam shadowing false
+
+robust "Driver" as D
+robust "Coordinator" as C
+robust "Worker_A" as A
+robust "Worker_B" as B
+
+@0
+D is running
+C is idle
+A is idle
+B is idle
+
+@5
+C is ready
+
+@10
+D is running
+C is running
+note top of C : step(): fan-out\nBuildSubtreeRequest
+
+@25
+C is waiting
+A is ready
+B is ready
+
+@30
+A is running
+note top of A : step(): build subtree
+
+@45
+A is waiting
+B is running
+note top of B : step(): build subtree
+
+@60
+B is waiting
+C is ready
+
+@65
+C is running
+note top of C : step(): SubtreeCompleted x2
+
+@80
+C is idle
+D is idle
+
+@100
+
+@enduml

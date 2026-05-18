@@ -1,0 +1,72 @@
+@startuml
+title Class diagram: иерархия драйверов акторов
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+abstract class ActorDriver {
+  +bind(actor)
+  +attach(actor)
+  +schedule(actor)
+  +is_idle(): bool
+  +queue_size(): int
+  +close()
+}
+
+abstract class BaseActorDriver {
+  -_ready_actors: ReadyActors
+  +attach(actor)
+  +schedule(actor)
+  +is_idle(): bool
+  +queue_size(): int
+  #_pop_ready_actor()
+  #_complete_actor(actor)
+  #_schedule_actor(actor)
+}
+
+abstract class ProceedableActorDriver {
+  +proceed(step_limit)
+  +drain(step_limit)
+}
+
+class AsyncioActorDriver {
+  -_loop: AbstractEventLoop
+  -_queue: asyncio.Queue
+  +schedule(actor)
+}
+
+class ThreadedActorDriver {
+  -_threads: list<Thread>
+  -_lock: Lock
+  -_cond: Condition
+  +schedule(actor)
+}
+
+class ManualActorDriver {
+  +proceed(step_limit)
+  +drain(step_limit)
+}
+
+class ReadyActors {
+  -_scheduled: set<int>
+  -_ready: deque<Drivable>
+  -_inflight: int
+}
+
+ActorDriver <|-- BaseActorDriver
+ActorDriver <|-- ProceedableActorDriver
+BaseActorDriver <|-- AsyncioActorDriver
+BaseActorDriver <|-- ThreadedActorDriver
+ProceedableActorDriver <|-- ManualActorDriver
+
+BaseActorDriver *-- "1" ReadyActors
+
+note bottom
+  Источник: src/actor/arch/* и src/actor/drivers/*.
+  Только иерархия драйверов — Actor/Mailbox см. в class/actor_architecture.puml,
+  динамика scheduling'а — в state/ready-actors.puml и sequence/actor-driver-scheduling.puml.
+end note
+
+@enduml

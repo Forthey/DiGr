@@ -1,0 +1,45 @@
+@startuml
+title FSM QueryParserActor — пошаговый разбор DSL
+
+skinparam shadowing false
+
+[*] --> READY
+
+READY --> CLASSIFYING_QUERY : ParseTokenStreamRequest
+
+state CLASSIFYING_QUERY
+CLASSIFYING_QUERY --> PARSING_CONTEXT_SPAN : keyword CONTEXT
+CLASSIFYING_QUERY --> PARSING_FIND_TARGET : keyword FIND
+
+state PARSING_CONTEXT_SPAN
+PARSING_CONTEXT_SPAN --> PARSING_CONTEXT_SPAN : ContinueParseContextSpan
+PARSING_CONTEXT_SPAN --> PARSING_CONTEXT_PATTERNS : span готов
+
+state PARSING_CONTEXT_PATTERNS
+PARSING_CONTEXT_PATTERNS --> PARSING_CONTEXT_PATTERNS : ContinueParseContextPatterns
+PARSING_CONTEXT_PATTERNS --> PARSING_CONTEXT_CONSTRAINTS : шаблоны готовы
+
+state PARSING_CONTEXT_CONSTRAINTS
+PARSING_CONTEXT_CONSTRAINTS --> PARSING_CONTEXT_CONSTRAINTS : ContinueParseContextConstraints
+PARSING_CONTEXT_CONSTRAINTS --> PARSING_FIND_TARGET : ключевое слово FIND
+
+state PARSING_FIND_TARGET
+PARSING_FIND_TARGET --> PARSING_FIND_CONSTRAINTS : target распознан
+
+state PARSING_FIND_CONSTRAINTS
+PARSING_FIND_CONSTRAINTS --> PARSING_FIND_CONSTRAINTS : ContinueParseFindConstraints
+PARSING_FIND_CONSTRAINTS --> READY : конец потока / DslQueryParsed
+
+note right of READY
+  Self-transitions по Continue*-сообщениям
+  отражают cooperative parsing: каждый шаг
+  обрабатывает порцию токенов и возвращает
+  управление scheduler'у.
+end note
+
+note bottom
+  Источник: src/dsl/parsing/states.py (DslQueryParserState),
+  src/dsl/actors/parsing/query_parser_actor.py.
+end note
+
+@enduml

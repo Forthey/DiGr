@@ -1,0 +1,41 @@
+@startuml
+title Sequence: загрузка YAML-конфигурации формата
+
+skinparam shadowing false
+
+actor "main.py" as M
+participant "ActorAstParser" as P
+participant "ConfigLoader" as L
+participant "yaml" as Y
+participant "ParserConfig" as PC
+participant "FormatConfig" as FC
+participant "EntityConfig" as EC
+
+M -> P : from_config_dir(config_dir)
+activate P
+P -> L : new()
+M -> P : parse(source, format_name?)
+P -> L : load(path, expected_format_name?)
+activate L
+
+L -> Y : safe_load(file)
+Y --> L : payload (dict)
+
+L -> L : _validate_root(payload)
+L -> FC : _parse_format(payload["format"])
+L -> EC : _parse_entity(name, data) [foreach]
+L -> L : _validate_relationships(...)
+L -> L : _validate_no_cycles(entities)
+
+L -> PC : new(format_config, entities)
+L --> P : ParserConfig
+deactivate L
+deactivate P
+
+note over M, EC
+  Источник: src/document_ast/config/config_loader.py,
+  src/document_ast/api/document_parser.py.
+  Структура классов — в class/format-config.puml.
+end note
+
+@enduml

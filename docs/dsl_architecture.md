@@ -13,7 +13,7 @@
 query text -> query AST -> execution over AstDocument -> structured result
 ```
 
-Класс-диаграмма подсистемы находится в [dsl_architecture.puml](./uml/dsl_architecture.puml).
+Класс-диаграмма подсистемы находится в [dsl_architecture.puml](./uml/class/dsl_architecture.puml).
 
 ## Главная идея архитектуры
 

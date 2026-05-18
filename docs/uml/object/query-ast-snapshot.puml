@@ -1,0 +1,50 @@
+@startuml
+title Object diagram: инстансы DslQuery для distance-запроса
+
+skinparam shadowing false
+skinparam objectAttributeIconSize 0
+hide empty members
+
+note as N
+  DSL-запрос:
+    DISTANCE FOR definition TO definition
+    WITHIN section: count <= 1
+    LIMIT PAIRS all_nearest
+    RETURN pairs, stats, distance(paragraph)
+end note
+
+object "q:DistanceQuery" as Q
+object "left:Selector" as L {
+  entity_name = "definition"
+}
+object "right:Selector" as R {
+  entity_name = "definition"
+}
+object "within1:WithinConstraint" as W {
+  entity_name = "section"
+}
+object "cc1:CountConstraint" as CC {
+  operator = "<="
+  value = 1
+}
+object "limit:PairLimit" as LP {
+  mode = "all_nearest"
+  value = null
+}
+object "ret1:DistanceReturn" as DR {
+  entity_name = "paragraph"
+}
+
+Q --> L : left
+Q --> R : right
+Q --> W : within[0]
+W --> CC : constraint
+Q --> LP : limit_pairs
+Q --> DR : returns[2]
+
+note bottom
+  Пример снимка инстансов после парсинга DSL.
+  Классы и связи — в class/query-ast.puml.
+end note
+
+@enduml

@@ -1,0 +1,41 @@
+@startuml
+title Sequence: ActorDslEngine.execute — фасадный уровень
+
+skinparam shadowing false
+
+actor "main.py" as M
+participant ":ActorDslEngine" as E
+participant ":ActorDslParser" as Pr
+participant ":ActorDslExecutor" as Ex
+
+M -> E : execute(document, query_source)
+activate E
+
+E -> Pr : parse(query_source)
+activate Pr
+note right
+  Внутри: запуск parser-runtime
+  с акторами (см. sequence/dsl_parser_sequence.puml)
+end note
+Pr --> E : DslQuery
+deactivate Pr
+
+E -> Ex : execute(document, query)
+activate Ex
+note right
+  Внутри: запуск execution-runtime
+  с акторами (см. sequence/dsl_executor_sequence.puml)
+end note
+Ex --> E : DslExecutionResult
+deactivate Ex
+
+E --> M : DslExecutionResult
+deactivate E
+
+note over M, Ex
+  Источник: src/dsl/api/engine.py.
+  Здесь показан только фасадный уровень — внутренние акторы и
+  сообщения вынесены в существующие sequence-диаграммы DSL.
+end note
+
+@enduml

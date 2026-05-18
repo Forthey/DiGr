@@ -1,0 +1,67 @@
+@startuml
+title Class diagram: лексер и парсер DSL (синхронные классы)
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+enum TokenKind {
+  EOF
+  IDENTIFIER
+  STRING
+  REGEX
+  INTEGER
+  CONTEXT
+  FIND
+  DISTANCE
+  FOR
+  TO
+  WITHIN
+  LIMIT_PAIRS
+  WHERE
+  RETURN
+  AND
+  OR
+  NOT
+  TRUE
+  FALSE
+  NULL
+  LBRACKET / RBRACKET
+  LPAREN / RPAREN
+  COMMA / COLON / DOT / SEMICOLON
+  EQ / NE / MATCH / NOT_MATCH
+  LT / LTE / GT / GTE
+}
+
+class DslToken <<dataclass>> {
+  +kind: TokenKind
+  +lexeme: str
+  +value: Any
+  +offset: int
+  +line: int
+  +column: int
+}
+
+class Lexer {
+  +tokenize(source: str): list<DslToken>
+}
+
+class RecursiveDescentParser {
+  -_tokens: list<DslToken>
+  -_pos: int
+  +parse(): DslQuery
+}
+
+DslToken --> TokenKind
+Lexer ..> DslToken : <<creates>>
+RecursiveDescentParser ..> DslToken : <<consumes>>
+RecursiveDescentParser ..> "DslQuery (из model)" : <<produces>>
+
+note bottom
+  Источник: src/dsl/parsing/{lexer,token,token_kind,recursive_descent_parser}.py.
+  Это синхронные классы; их acтор-обёртки —
+  в class/dsl_architecture.puml и в state/dsl-query-parser.puml.
+end note
+
+@enduml

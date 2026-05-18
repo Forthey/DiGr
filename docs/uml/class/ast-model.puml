@@ -1,0 +1,54 @@
+@startuml
+title Class diagram: AST-модель документа
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+class SourceDocument <<dataclass>> {
+  +path: str
+  +format_name: str
+  +text: str
+}
+
+class AstDocument <<dataclass>> {
+  +source_path: str
+  +format_name: str
+  +root_entity: str
+  +root: AstNode
+  +to_dict(): dict
+}
+
+class AstNode <<dataclass>> {
+  +entity: str
+  +text: str
+  +start: int
+  +end: int
+  +children: list<AstNode>
+  +metadata: dict
+  +to_dict(): dict
+}
+
+class TextSegment <<dataclass>> {
+  +text: str
+  +start: int
+  +end: int
+  +metadata: dict
+}
+
+AstDocument *-- "1" AstNode : root
+AstNode o-- "0..*" AstNode : children
+
+note bottom of TextSegment
+  Промежуточная структура сегментатора.
+  Не часть AstDocument: используется
+  для построения AstNode из исходного текста.
+end note
+
+note bottom
+  Чистая модель данных без парсера и акторов.
+  Парсер показан в class/ast_parser_architecture.puml.
+end note
+
+@enduml

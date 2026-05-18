@@ -1,0 +1,25 @@
+@startuml
+title FSM DSL-parser ParserCoordinatorActor
+
+skinparam shadowing false
+
+[*] --> IDLE
+
+IDLE --> WAITING_FOR_TOKENS : ParseDslRequest\n/ TokenizeDslRequest → LexerActor
+
+WAITING_FOR_TOKENS : ожидаем результат лексера
+WAITING_FOR_TOKENS --> WAITING_FOR_QUERY_AST : DslTokenized\n/ ParseTokenStreamRequest → QueryParserActor
+
+WAITING_FOR_QUERY_AST : ожидаем DslQueryParsed
+WAITING_FOR_QUERY_AST --> COMPLETED : DslQueryParsed\n/ forward to Collector
+WAITING_FOR_QUERY_AST --> COMPLETED : DslParseFailed\n/ forward error
+
+COMPLETED --> [*]
+
+note right
+  Источник: src/dsl/parsing/states.py (DslCoordinatorState).
+  Внутренний FSM QueryParserActor с многошаговым разбором
+  показан отдельно в state/dsl-query-parser.puml.
+end note
+
+@enduml

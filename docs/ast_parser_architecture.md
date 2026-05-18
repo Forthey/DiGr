@@ -14,7 +14,7 @@
 
 Подсистема не знает заранее про конкретные сущности вроде `sentence` или `paragraph`. Эти сущности задаются конфигурацией формата.
 
-Класс-диаграмма подсистемы находится в [ast_parser_architecture.puml](./uml/ast_parser_architecture.puml).
+Класс-диаграмма подсистемы находится в [ast_parser_architecture.puml](./uml/class/ast_parser_architecture.puml).
 
 ## Текущая структура пакета
 
